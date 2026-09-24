@@ -71,7 +71,7 @@ Todos os agentes (Principal, QA, Dev) **DEVEM** seguir rigorosamente a especific
    * Linting: `style(models): formatar código com biome`
 
 ## 4. Padrão de Pull Requests (PRs)
-Sempre que um agente ou desenvolvedor abrir um Pull Request via GitHub CLI, a descrição (body) deve seguir o seguinte template para garantir clareza nas revisões:
+Sempre que um agente ou desenvolvedor abrir um Pull Request via GitHub CLI, a descrição (body) deve seguir o seguinte template para garantir clareza nas revisões, e **LABELS** correspondentes ao tipo/escopo devem ser aplicadas (ex: `--label "enhancement"` ou `--label "feat,models"`).
 
 ### Estrutura do PR:
 **Título:** `<tipo>[escopo opcional]: <descrição concisa>` (O mesmo padrão do Conventional Commits)
