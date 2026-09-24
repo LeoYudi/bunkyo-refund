@@ -69,3 +69,27 @@ Todos os agentes (Principal, QA, Dev) **DEVEM** seguir rigorosamente a especific
    * Dev implementando: `feat(models): implementar validações zod para refund domain`
    * Correção: `fix(repositories): corrigir query de busca por status no refund repository`
    * Linting: `style(models): formatar código com biome`
+
+## 4. Padrão de Pull Requests (PRs)
+Sempre que um agente ou desenvolvedor abrir um Pull Request via GitHub CLI, a descrição (body) deve seguir o seguinte template para garantir clareza nas revisões:
+
+### Estrutura do PR:
+**Título:** `<tipo>[escopo opcional]: <descrição concisa>` (O mesmo padrão do Conventional Commits)
+
+**Corpo (Body):**
+```markdown
+## 🎯 Objetivo
+Resumo conciso sobre o que este PR resolve ou qual feature ele adiciona.
+
+## 🛠️ Mudanças Realizadas
+- Detalhe 1 (ex: Adição do schema `CreateRefundSchema`)
+- Detalhe 2 (ex: Testes unitários cobrindo X e Y)
+
+## 🧪 Como foi testado?
+- [ ] Testes unitários (`vitest`) implementados e passando.
+- [ ] Testes de integração/E2E (se aplicável).
+- [ ] Validação manual.
+
+## 📌 Notion / Roadmap
+- Referência ao card no Notion: [ID ou Nome da Tarefa]
+```
