@@ -11,7 +11,7 @@ O **Bunkyo Refund Project** é um sistema projetado para otimizar o fluxo de ped
 
 ## 3. Fluxo Principal (User Journey)
 
-1.  **Registro do Pedido (Público):** O Solicitante acessa a página pública (`/submit`), preenche seu Nome, E-mail, Título da Despesa e anexa o arquivo (PDF/Imagem). O sistema salva com status `PENDENTE_TRIAGEM`.
+1.  **Registro do Pedido (Público):** O Solicitante acessa a página pública (`/submit`), preenche apenas o seu Nome e anexa o arquivo (PDF/Imagem). O sistema salva com status `PENDENTE_TRIAGEM`.
 2.  **Triagem do Admin:** O Administrador faz login no sistema e visualiza a caixa de entrada de requisições. Ele analisa por cima se o pedido faz sentido.
 3.  **Aprovação & Mágica da IA:** O Administrador clica em "Aprovar para Leitura". Neste exato momento, o sistema envia o anexo para a API do Gemini. A IA lê a nota e preenche automaticamente o painel do Admin com Valor, CNPJ, etc. O status muda para `PROCESSADO`.
 4.  **Consolidação e Disparo em Lote (Batch):** No fim do dia (ou da semana), o Administrador seleciona na tabela múltiplos pedidos `PROCESSADO` e clica em "Enviar ao Financeiro". O sistema consolida todos em um único e-mail estruturado via Resend.
