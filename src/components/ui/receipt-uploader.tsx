@@ -2,6 +2,8 @@
 
 import { FileText, Upload } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 interface ReceiptUploaderProps {
@@ -43,7 +45,6 @@ export function ReceiptUploader({
 
       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
         const file = e.dataTransfer.files[0];
-        // Validação simples do tipo
         if (file.type.startsWith("image/") || file.type === "application/pdf") {
           onFileSelect?.(file);
         }
@@ -66,8 +67,7 @@ export function ReceiptUploader({
   }, []);
 
   return (
-    // biome-ignore lint/a11y/useSemanticElements: This is a complex dropzone area, not a simple button
-    <div
+    <Card
       onClick={handleClick}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -82,46 +82,53 @@ export function ReceiptUploader({
       onDragOver={handleDragOver}
       onDrop={handleDrop}
       className={cn(
-        "border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors duration-200",
+        "border-2 border-dashed transition-colors duration-200 cursor-pointer overflow-hidden",
         isDragActive
           ? "border-primary bg-primary/5"
           : "border-border hover:border-primary/50 bg-background",
         className,
       )}
     >
-      <input
-        type="file"
-        ref={inputRef}
-        onChange={handleFileChange}
-        accept="image/*,application/pdf"
-        className="hidden"
-      />
-      <div className="flex flex-col items-center justify-center gap-2">
-        <div className="p-3 rounded-full bg-muted text-muted-foreground">
+      <CardContent className="flex flex-col items-center justify-center p-6 gap-4 text-center">
+        <input
+          type="file"
+          ref={inputRef}
+          onChange={handleFileChange}
+          accept="image/*,application/pdf"
+          className="hidden"
+        />
+        <div className="p-4 rounded-full bg-muted/50 text-muted-foreground ring-1 ring-border">
           {selectedFile ? (
-            <FileText className="size-6 text-primary" />
+            <FileText className="size-8 text-primary" />
           ) : (
-            <Upload className="size-6" />
+            <Upload className="size-8" />
           )}
         </div>
+
         {selectedFile ? (
-          <div>
-            <p className="text-sm font-medium text-foreground">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-foreground">
               {selectedFile.name}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-muted-foreground">
               Clique ou arraste para substituir o arquivo
             </p>
           </div>
         ) : (
-          <>
+          <div className="space-y-1">
             <p className="text-sm font-medium text-foreground">
-              Arraste e solte o comprovante aqui, ou clique para selecionar
+              Arraste e solte o comprovante aqui
             </p>
             <p className="text-xs text-muted-foreground">PNG, JPG ou PDF</p>
-          </>
+          </div>
         )}
-      </div>
-    </div>
+
+        {!selectedFile && (
+          <Button variant="secondary" size="sm" className="mt-2" tabIndex={-1}>
+            Selecionar arquivo
+          </Button>
+        )}
+      </CardContent>
+    </Card>
   );
 }
