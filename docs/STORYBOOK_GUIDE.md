@@ -40,3 +40,38 @@ export const Default: Story = {
 1. **Autodocs**: Sempre inclua a tag `tags: ["autodocs"]` no objeto meta para gerar a documentação automaticamente.
 2. **Title**: Utilize uma estrutura hierárquica clara, como `UI/Componente` ou `Features/Dominio/Componente`.
 3. **Variações**: Crie exports diferentes para as principais variações de estado do componente (ex: Default, Outline, Destructive, Loading, etc).
+
+## Páginas e Formulários Complexos
+
+É fundamental que **páginas inteiras** (`page.tsx`) e **formulários complexos** (ex: `submit-refund-form.tsx`) também sejam documentados no Storybook. Isso permite visualização e testes de fluxos sem depender de um banco de dados rodando.
+
+### Regras para Formulários
+- Agrupe formulários usando a hierarquia `title: "Forms/[NomeDoForm]"`.
+- Crie cenários (Stories) que representem o sucesso e as potenciais falhas de conexão simulando as `Server Actions` com atrasos artificiais (`setTimeout`).
+
+```tsx
+// Exemplo de Form
+export const WithServerError: Story = {
+  args: {
+    onSubmitAction: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      return { success: false, error: "Erro de conexão simulado." };
+    },
+  },
+};
+```
+
+### Regras para Páginas
+- Agrupe páginas usando a hierarquia `title: "Pages/[NomeDaPagina]"`.
+- Utilize `parameters: { layout: "fullscreen" }` para que a visualização da página não sofra padding das margens do Storybook.
+
+```tsx
+// Exemplo de Página
+const meta = {
+  title: "Pages/SubmitRefundPage",
+  component: SubmitPage,
+  parameters: {
+    layout: "fullscreen",
+  },
+} satisfies Meta<typeof SubmitPage>;
+```
