@@ -50,7 +50,7 @@ describe("uploadReceipt Server Action", () => {
     expect(mockFrom).toHaveBeenCalledWith("receipts");
     const uploadCallArgs = mockUpload.mock.calls[0];
     expect(uploadCallArgs[0]).toMatch(
-      /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\.png$/,
+      /^\d{8}-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\.png$/,
     );
     expect(uploadCallArgs[1]).toBe(mockFile);
     expect(mockGetPublicUrl).toHaveBeenCalled();
