@@ -93,3 +93,7 @@ Resumo conciso sobre o que este PR resolve ou qual feature ele adiciona.
 ## 📌 Notion / Roadmap
 - Referência ao card no Notion: [ID ou Nome da Tarefa]
 ```
+
+## 5. UI & Storybook
+Ao criar ou modificar componentes visuais (especialmente em `src/components/ui/`), os subagentes devem consultar e seguir as regras detalhadas no guia `docs/STORYBOOK_GUIDE.md`. Histórias (stories) devem ser mantidas junto aos componentes para garantir uma documentação viva da interface.
+
