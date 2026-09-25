@@ -1,7 +1,7 @@
 "use client";
 
-import { FileText, Upload } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Upload } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -10,31 +10,14 @@ import { CameraCapture } from "./camera-capture";
 interface ReceiptUploaderProps {
   onFileSelect?: (file: File) => void;
   className?: string;
-  selectedFile?: File | null;
 }
 
 export function ReceiptUploader({
   onFileSelect,
   className,
-  selectedFile,
 }: ReceiptUploaderProps) {
   const [isDragActive, setIsDragActive] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!selectedFile?.type.startsWith("image/")) {
-      setPreviewUrl(null);
-      return;
-    }
-
-    const objectUrl = URL.createObjectURL(selectedFile);
-    setPreviewUrl(objectUrl);
-
-    return () => {
-      URL.revokeObjectURL(objectUrl);
-    };
-  }, [selectedFile]);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -113,74 +96,39 @@ export function ReceiptUploader({
             accept="image/*,application/pdf"
             className="hidden"
           />
-          <div
-            className={cn(
-              "flex items-center justify-center text-muted-foreground ring-1 ring-border",
-              selectedFile?.type.startsWith("image/") && previewUrl
-                ? "p-0 rounded-lg overflow-hidden bg-transparent ring-0"
-                : "p-4 rounded-full bg-muted/50",
-            )}
-          >
-            {selectedFile ? (
-              selectedFile.type.startsWith("image/") && previewUrl ? (
-                // biome-ignore lint/performance/noImgElement: Blob URLs cannot be effectively optimized by Next.js Image component
-                <img
-                  src={previewUrl}
-                  alt="Preview do comprovante"
-                  className="size-16 rounded-lg object-cover"
-                />
-              ) : (
-                <FileText className="size-8 text-primary" />
-              )
-            ) : (
-              <Upload className="size-8" />
-            )}
+          <div className="p-4 rounded-full bg-muted/50 text-muted-foreground ring-1 ring-border">
+            <Upload className="size-8" />
           </div>
 
-          {selectedFile ? (
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-foreground">
-                {selectedFile.name}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Clique ou arraste para substituir o arquivo
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-foreground">
-                Arraste e solte o comprovante aqui
-              </p>
-              <p className="text-xs text-muted-foreground">PNG, JPG ou PDF</p>
-            </div>
-          )}
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-foreground">
+              Arraste e solte o comprovante aqui
+            </p>
+            <p className="text-xs text-muted-foreground">PNG, JPG ou PDF</p>
+          </div>
 
-          {!selectedFile && (
-            <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                tabIndex={-1}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleClick();
-                }}
-              >
-                Selecionar arquivo
-              </Button>
-            </div>
-          )}
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              tabIndex={-1}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleClick();
+              }}
+            >
+              Selecionar arquivo
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
-      {!selectedFile && (
-        <div className="flex items-center justify-center">
-          <p className="text-sm text-muted-foreground mr-4">
-            Ou prefere tirar uma foto agora?
-          </p>
-          <CameraCapture onCapture={(file) => onFileSelect?.(file)} />
-        </div>
-      )}
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <p className="text-sm text-muted-foreground">
+          Ou prefere tirar uma foto agora?
+        </p>
+        <CameraCapture onCapture={(file) => onFileSelect?.(file)} />
+      </div>
     </div>
   );
 }

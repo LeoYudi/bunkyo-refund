@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ReceiptUploader } from "./receipt-uploader";
 
 describe("ReceiptUploader Base Component", () => {
@@ -77,40 +77,6 @@ describe("ReceiptUploader Base Component", () => {
         fireEvent.click(button);
         expect(clickSpy).toHaveBeenCalled();
       }
-    });
-  });
-
-  describe("Image Preview", () => {
-    beforeAll(() => {
-      URL.createObjectURL = vi.fn(() => "mock-url");
-    });
-
-    afterAll(() => {
-      vi.restoreAllMocks();
-    });
-
-    it('renders an <img> tag with alt="Preview do comprovante" when selectedFile is an image', () => {
-      const imageFile = new File(["dummy content"], "test.png", {
-        type: "image/png",
-      });
-      render(<ReceiptUploader selectedFile={imageFile} />);
-      const img = screen.queryByAltText("Preview do comprovante");
-      expect(img).not.toBeNull();
-      expect(img?.tagName.toLowerCase()).toBe("img");
-      expect(img?.getAttribute("src")).toBe("mock-url");
-      expect(URL.createObjectURL).toHaveBeenCalledWith(imageFile);
-    });
-
-    it("does not render an <img> tag when selectedFile is a PDF, but renders the generic document icon", () => {
-      const pdfFile = new File(["dummy content"], "test.pdf", {
-        type: "application/pdf",
-      });
-      const { container } = render(<ReceiptUploader selectedFile={pdfFile} />);
-      const img = screen.queryByAltText("Preview do comprovante");
-      expect(img).toBeNull();
-
-      const fileIcon = container.querySelector(".lucide-file-text");
-      expect(fileIcon).not.toBeNull();
     });
   });
 });
