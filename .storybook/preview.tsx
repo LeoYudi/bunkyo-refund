@@ -1,11 +1,33 @@
-import type { Preview } from '@storybook/nextjs-vite'
+import "../src/app/globals.css";
+
+import type { Preview } from "@storybook/nextjs-vite";
+import { Geist, Geist_Mono } from "next/font/google";
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
 
 const preview: Preview = {
+  decorators: [
+    (Story) => (
+      <div
+        className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
+      >
+        <Story />
+      </div>
+    ),
+  ],
   parameters: {
     controls: {
       matchers: {
-       color: /(background|color)$/i,
-       date: /Date$/i,
+        color: /(background|color)$/i,
+        date: /Date$/i,
       },
     },
 
@@ -13,8 +35,8 @@ const preview: Preview = {
       // 'todo' - show a11y violations in the test UI only
       // 'error' - fail CI on a11y violations
       // 'off' - skip a11y checks entirely
-      test: 'todo'
-    }
+      test: "todo",
+    },
   },
 };
 

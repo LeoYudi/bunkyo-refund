@@ -15,6 +15,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 * **O usuário é um Especialista em Desenvolvimento de Software.**
 * **PROIBIÇÃO DE ASSUMIR:** Nenhum agente (nem o Agente Principal, nem o QA, nem o Dev) tem permissão para assumir decisões arquiteturais, de design ou de regra de negócio por conta própria em caso de ambiguidade.
 * **PERGUNTE ANTES:** Se houver duas formas de implementar algo ou se faltar uma especificação técnica, você **DEVE** parar a execução e perguntar ao usuário para validar a decisão antes de escrever o código. Não tome liberdades técnicas sem aprovação.
+* **INSTALAÇÃO DE DEPENDÊNCIAS:** NUNCA instale novas bibliotecas ou pacotes (via pnpm/npm) sem antes perguntar e obter a aprovação explícita do usuário.
+* **PRESERVAÇÃO DE HISTÓRICO:** Nunca reescreva o histórico que já foi enviado para o repositório remoto. É estritamente proibido o uso de `git push --force`. Erros cometidos devem fazer parte do histórico e ser corrigidos em novos commits (ex: `fix:` ou `refactor:`), priorizando a transparência e a evolução real do código ao invés de um histórico artificialmente limpo.
 
 ## 1. Sincronização e Roadmap (Notion)
 * **FONTE DA VERDADE:** O Roadmap e o status atual do projeto moram no banco de dados "Kanban board" no Notion do usuário (ID: `307f8698-a609-80e0-937e-dc5e621e71ab`).
