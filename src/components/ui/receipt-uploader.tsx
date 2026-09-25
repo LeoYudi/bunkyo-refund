@@ -1,7 +1,7 @@
 "use client";
 
 import { FileText, Upload } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -19,7 +19,22 @@ export function ReceiptUploader({
   selectedFile,
 }: ReceiptUploaderProps) {
   const [isDragActive, setIsDragActive] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!selectedFile?.type.startsWith("image/")) {
+      setPreviewUrl(null);
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(selectedFile);
+    setPreviewUrl(objectUrl);
+
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [selectedFile]);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -98,9 +113,25 @@ export function ReceiptUploader({
             accept="image/*,application/pdf"
             className="hidden"
           />
-          <div className="p-4 rounded-full bg-muted/50 text-muted-foreground ring-1 ring-border">
+          <div
+            className={cn(
+              "flex items-center justify-center text-muted-foreground ring-1 ring-border",
+              selectedFile?.type.startsWith("image/") && previewUrl
+                ? "p-0 rounded-lg overflow-hidden bg-transparent ring-0"
+                : "p-4 rounded-full bg-muted/50",
+            )}
+          >
             {selectedFile ? (
-              <FileText className="size-8 text-primary" />
+              selectedFile.type.startsWith("image/") && previewUrl ? (
+                // biome-ignore lint/performance/noImgElement: Blob URLs cannot be effectively optimized by Next.js Image component
+                <img
+                  src={previewUrl}
+                  alt="Preview do comprovante"
+                  className="size-16 rounded-lg object-cover"
+                />
+              ) : (
+                <FileText className="size-8 text-primary" />
+              )
             ) : (
               <Upload className="size-8" />
             )}
