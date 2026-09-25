@@ -3,8 +3,7 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('receipts', 'receipts', true)
 ON CONFLICT (id) DO NOTHING;
 
--- Habilita RLS nos objetos do storage caso não esteja
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+-- RLS nos objetos do storage já vem habilitado por padrão no Supabase
 
 -- Política para permitir que qualquer pessoa (anon ou autenticada) faça upload
 CREATE POLICY "Anon can upload receipts"
