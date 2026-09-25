@@ -43,4 +43,40 @@ describe("ReceiptUploader Base Component", () => {
       expect(clickSpy).toHaveBeenCalled();
     }
   });
+
+  describe("Camera capture", () => {
+    it('renders a "Tirar Foto" button', () => {
+      render(<ReceiptUploader />);
+      const button = screen.queryByText(/tirar foto/i);
+      expect(button).not.toBeNull();
+    });
+
+    it('has an input with capture="environment" and accept="image/*"', () => {
+      const { container } = render(<ReceiptUploader />);
+      const cameraInput = container.querySelector(
+        'input[type="file"][capture="environment"]',
+      ) as HTMLInputElement;
+      expect(cameraInput).not.toBeNull();
+      if (cameraInput) {
+        expect(cameraInput.accept).toContain("image/*");
+      }
+    });
+
+    it('simulates opening the camera file dialog when "Tirar Foto" is clicked', () => {
+      const { container } = render(<ReceiptUploader />);
+      const button = screen.queryByText(/tirar foto/i);
+      expect(button).not.toBeNull();
+
+      const cameraInput = container.querySelector(
+        'input[type="file"][capture="environment"]',
+      ) as HTMLInputElement;
+      expect(cameraInput).not.toBeNull();
+
+      if (button && cameraInput) {
+        const clickSpy = vi.spyOn(cameraInput, "click");
+        fireEvent.click(button);
+        expect(clickSpy).toHaveBeenCalled();
+      }
+    });
+  });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Upload } from "lucide-react";
+import { Camera, FileText, Upload } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,6 +19,7 @@ export function ReceiptUploader({
 }: ReceiptUploaderProps) {
   const [isDragActive, setIsDragActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -62,8 +63,22 @@ export function ReceiptUploader({
     [onFileSelect],
   );
 
+  const handleCameraChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files.length > 0) {
+        onFileSelect?.(e.target.files[0]);
+      }
+    },
+    [onFileSelect],
+  );
+
   const handleClick = useCallback(() => {
     inputRef.current?.click();
+  }, []);
+
+  const handleCameraClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    cameraInputRef.current?.click();
   }, []);
 
   return (
@@ -97,6 +112,14 @@ export function ReceiptUploader({
           accept="image/*,application/pdf"
           className="hidden"
         />
+        <input
+          type="file"
+          ref={cameraInputRef}
+          onChange={handleCameraChange}
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+        />
         <div className="p-4 rounded-full bg-muted/50 text-muted-foreground ring-1 ring-border">
           {selectedFile ? (
             <FileText className="size-8 text-primary" />
@@ -124,9 +147,29 @@ export function ReceiptUploader({
         )}
 
         {!selectedFile && (
-          <Button variant="secondary" size="sm" className="mt-2" tabIndex={-1}>
-            Selecionar arquivo
-          </Button>
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              tabIndex={-1}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleClick();
+              }}
+            >
+              Selecionar arquivo
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              tabIndex={-1}
+              onClick={handleCameraClick}
+            >
+              <Camera className="size-4 mr-2" />
+              Tirar Foto
+            </Button>
+          </div>
         )}
       </CardContent>
     </Card>
