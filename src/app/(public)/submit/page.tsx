@@ -35,7 +35,6 @@ export default function SubmitPage() {
 
       // In the future, this will redirect to /submit/success
       // For now, let's just return success so the form knows it worked.
-      alert("Reembolso solicitado com sucesso!");
       return { success: true };
     } catch (error: unknown) {
       return {

@@ -7,6 +7,7 @@ import { z } from "zod";
 import { Input } from "@/components/ui/input";
 import { ReceiptPreview } from "@/components/ui/receipt-preview";
 import { ReceiptUploader } from "@/components/ui/receipt-uploader";
+import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
 export const SubmitRefundFormSchema = z.object({
@@ -68,11 +69,29 @@ export function SubmitRefundForm({
       const result = await onSubmitAction(formData);
       if (!result.success && result.error) {
         setServerError(result.error);
+        toast.add({
+          type: "error",
+          title: "Erro ao enviar",
+          description: result.error,
+        });
+      } else {
+        toast.add({
+          type: "success",
+          title: "Sucesso!",
+          description: "Sua nota foi enviada e está em análise.",
+        });
+        // reset form on success
+        form.reset();
       }
     } catch (error: unknown) {
-      setServerError(
-        error instanceof Error ? error.message : "Erro ao enviar solicitação",
-      );
+      const msg =
+        error instanceof Error ? error.message : "Erro ao enviar solicitação";
+      setServerError(msg);
+      toast.add({
+        type: "error",
+        title: "Erro inesperado",
+        description: msg,
+      });
     } finally {
       setIsSubmitting(false);
     }
