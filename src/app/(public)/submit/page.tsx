@@ -40,7 +40,10 @@ export default function SubmitPage() {
     } catch (error: unknown) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Erro inesperado ao processar solicitação",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Erro inesperado ao processar solicitação",
       };
     }
   };
