@@ -13,23 +13,11 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {
-  args: {
-    selectedFile: null,
-  },
-};
+export const Default: Story = {};
 
-export const WithSelectedImage: Story = {
+export const WithSelectedFile: Story = {
   args: {
-    selectedFile: new File([""], "comprovante-uber.jpg", {
-      type: "image/jpeg",
-    }),
-  },
-};
-
-export const WithSelectedPDF: Story = {
-  args: {
-    selectedFile: new File([""], "nota-fiscal.pdf", {
+    selectedFile: new File([""], "nota_fiscal.pdf", {
       type: "application/pdf",
     }),
   },

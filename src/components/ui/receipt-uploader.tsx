@@ -9,14 +9,14 @@ import { CameraCapture } from "./camera-capture";
 
 interface ReceiptUploaderProps {
   onFileSelect?: (file: File) => void;
-  className?: string;
   selectedFile?: File | null;
+  className?: string;
 }
 
 export function ReceiptUploader({
   onFileSelect,
-  className,
   selectedFile,
+  className,
 }: ReceiptUploaderProps) {
   const [isDragActive, setIsDragActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -143,8 +143,8 @@ export function ReceiptUploader({
       </Card>
 
       {!selectedFile && (
-        <div className="flex items-center justify-center">
-          <p className="text-sm text-muted-foreground mr-4">
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <p className="text-sm text-muted-foreground">
             Ou prefere tirar uma foto agora?
           </p>
           <CameraCapture onCapture={(file) => onFileSelect?.(file)} />
