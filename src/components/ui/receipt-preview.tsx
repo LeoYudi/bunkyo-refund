@@ -11,6 +11,7 @@ interface ReceiptPreviewProps {
   onConfirm?: () => void;
   onCancel?: () => void;
   className?: string;
+  disabled?: boolean;
 }
 
 export function ReceiptPreview({
@@ -18,6 +19,7 @@ export function ReceiptPreview({
   onConfirm,
   onCancel,
   className,
+  disabled,
 }: ReceiptPreviewProps) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -70,11 +72,17 @@ export function ReceiptPreview({
             variant="outline"
             className="w-full"
             onClick={onCancel}
+            disabled={disabled}
           >
             <X className="size-4 mr-2" />
             Cancelar
           </Button>
-          <Button type="button" className="w-full" onClick={onConfirm}>
+          <Button
+            type="button"
+            className="w-full"
+            onClick={onConfirm}
+            disabled={disabled}
+          >
             <Check className="size-4 mr-2" />
             Confirmar
           </Button>

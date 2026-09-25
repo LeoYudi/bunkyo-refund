@@ -127,6 +127,7 @@ export function ReceiptUploader({
           {!selectedFile && (
             <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
               <Button
+                type="button"
                 variant="secondary"
                 size="sm"
                 tabIndex={-1}
