@@ -1,6 +1,6 @@
 "use client";
 
-import { Upload } from "lucide-react";
+import { FileText, Upload } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,11 +9,13 @@ import { CameraCapture } from "./camera-capture";
 
 interface ReceiptUploaderProps {
   onFileSelect?: (file: File) => void;
+  selectedFile?: File | null;
   className?: string;
 }
 
 export function ReceiptUploader({
   onFileSelect,
+  selectedFile,
   className,
 }: ReceiptUploaderProps) {
   const [isDragActive, setIsDragActive] = useState(false);
@@ -97,38 +99,57 @@ export function ReceiptUploader({
             className="hidden"
           />
           <div className="p-4 rounded-full bg-muted/50 text-muted-foreground ring-1 ring-border">
-            <Upload className="size-8" />
+            {selectedFile ? (
+              <FileText className="size-8 text-primary" />
+            ) : (
+              <Upload className="size-8" />
+            )}
           </div>
 
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-foreground">
-              Arraste e solte o comprovante aqui
-            </p>
-            <p className="text-xs text-muted-foreground">PNG, JPG ou PDF</p>
-          </div>
+          {selectedFile ? (
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-foreground">
+                {selectedFile.name}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Clique ou arraste para substituir o arquivo
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-foreground">
+                Arraste e solte o comprovante aqui
+              </p>
+              <p className="text-xs text-muted-foreground">PNG, JPG ou PDF</p>
+            </div>
+          )}
 
-          <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              tabIndex={-1}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleClick();
-              }}
-            >
-              Selecionar arquivo
-            </Button>
-          </div>
+          {!selectedFile && (
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                tabIndex={-1}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleClick();
+                }}
+              >
+                Selecionar arquivo
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      <div className="flex flex-wrap items-center justify-center gap-2">
-        <p className="text-sm text-muted-foreground">
-          Ou prefere tirar uma foto agora?
-        </p>
-        <CameraCapture onCapture={(file) => onFileSelect?.(file)} />
-      </div>
+      {!selectedFile && (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <p className="text-sm text-muted-foreground">
+            Ou prefere tirar uma foto agora?
+          </p>
+          <CameraCapture onCapture={(file) => onFileSelect?.(file)} />
+        </div>
+      )}
     </div>
   );
 }

@@ -14,3 +14,11 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
+
+export const WithSelectedFile: Story = {
+  args: {
+    selectedFile: new File([""], "nota_fiscal.pdf", {
+      type: "application/pdf",
+    }),
+  },
+};
