@@ -36,11 +36,10 @@ export class RefundRepository {
     data: z.infer<typeof CreateRefundSchema>,
   ): Promise<RefundRequest> {
     const supabase = await this.getClient();
-    const { data: created, error } = await supabase
-      .from("refund_requests")
-      .insert(data)
-      .select()
-      .single();
+    const { data: created, error } = await supabase.rpc(
+      "create_refund_request",
+      { payload: data },
+    );
 
     if (error) {
       throw new Error(extractErrorMessage(error));

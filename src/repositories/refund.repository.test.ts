@@ -46,6 +46,25 @@ describe("RefundRepository", () => {
           },
           error: null,
         }),
+        rpc: vi.fn().mockResolvedValue({
+          data: {
+            id: "123e4567-e89b-12d3-a456-426614174000",
+            requester_name: "John Doe",
+            receipt_file_url: "https://example.com/receipt.pdf",
+            status: "PENDING",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            description: null,
+            issue_date: null,
+            issue_number: null,
+            issuer_cnpj: null,
+            issuer_name: null,
+            receiver_cnpj: null,
+            reviewed_by: null,
+            total_value: null,
+          },
+          error: null,
+        }),
       };
 
       mockCreateClient(mockSupabase);
@@ -61,10 +80,11 @@ describe("RefundRepository", () => {
       expect(result.status).toBe("PENDING");
 
       expect(createClient).toHaveBeenCalled();
-      expect(mockSupabase.from).toHaveBeenCalledWith("refund_requests");
-      expect(mockSupabase.insert).toHaveBeenCalledWith({
-        requester_name: "John Doe",
-        receipt_file_url: "https://example.com/receipt.pdf",
+      expect(mockSupabase.rpc).toHaveBeenCalledWith("create_refund_request", {
+        payload: {
+          requester_name: "John Doe",
+          receipt_file_url: "https://example.com/receipt.pdf",
+        },
       });
     });
 
@@ -74,6 +94,10 @@ describe("RefundRepository", () => {
         insert: vi.fn().mockReturnThis(),
         select: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({
+          data: null,
+          error: null, // the old implementation won't throw because we mock it to succeed
+        }),
+        rpc: vi.fn().mockResolvedValue({
           data: null,
           error: new Error("Supabase error"),
         }),
