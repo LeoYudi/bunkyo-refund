@@ -1,13 +1,12 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn } from "@storybook/test";
 import { ReceiptUploader } from "./receipt-uploader";
 
 const meta = {
   title: "UI/ReceiptUploader",
   component: ReceiptUploader,
   tags: ["autodocs"],
-  args: {
-    onFileSelect: fn(),
+  argTypes: {
+    onFileSelect: { action: "onFileSelect" },
   },
 } satisfies Meta<typeof ReceiptUploader>;
 
