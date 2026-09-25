@@ -64,7 +64,7 @@ export function ReceiptPreview({
           </div>
         </div>
 
-        <div className="flex w-full gap-3 mt-2">
+        <div className="grid grid-cols-2 w-full gap-3 mt-2">
           <Button
             type="button"
             variant="outline"
