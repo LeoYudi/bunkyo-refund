@@ -1,12 +1,29 @@
-import { z } from 'zod';
-import { CreateRefundSchema } from '@/models/refund.model';
-import { Database } from '@/models/database.types';
-import { createClient } from '@/lib/supabase/server';
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
+import type { Database } from "@/models/database.types";
+import type { CreateRefundSchema } from "@/models/refund.model";
 
-export type RefundRequest = Database['public']['Tables']['refund_requests']['Row'];
+export type RefundRequest =
+  Database["public"]["Tables"]["refund_requests"]["Row"];
+
+function extractErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return error.message;
+  }
+  return String(error);
+}
 
 export class RefundRepository {
-  constructor(private supabaseClient?: any) {}
+  constructor(private supabaseClient?: SupabaseClient<Database>) {}
 
   private async getClient() {
     if (this.supabaseClient) {
@@ -15,19 +32,18 @@ export class RefundRepository {
     return await createClient();
   }
 
-  async create(data: z.infer<typeof CreateRefundSchema>): Promise<RefundRequest> {
+  async create(
+    data: z.infer<typeof CreateRefundSchema>,
+  ): Promise<RefundRequest> {
     const supabase = await this.getClient();
     const { data: created, error } = await supabase
-      .from('refund_requests')
+      .from("refund_requests")
       .insert(data)
       .select()
       .single();
 
     if (error) {
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error(error.message || JSON.stringify(error));
+      throw new Error(extractErrorMessage(error));
     }
 
     return created;
@@ -36,19 +52,21 @@ export class RefundRepository {
   async findById(id: string): Promise<RefundRequest | null> {
     const supabase = await this.getClient();
     const { data, error } = await supabase
-      .from('refund_requests')
-      .select('*')
-      .eq('id', id)
+      .from("refund_requests")
+      .select("*")
+      .eq("id", id)
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "PGRST116"
+      ) {
         return null;
       }
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error(error.message || JSON.stringify(error));
+      throw new Error(extractErrorMessage(error));
     }
 
     return data;
@@ -56,21 +74,18 @@ export class RefundRepository {
 
   async updateStatus(
     id: string,
-    status: Database['public']['Enums']['refund_status']
+    status: Database["public"]["Enums"]["refund_status"],
   ): Promise<RefundRequest> {
     const supabase = await this.getClient();
     const { data, error } = await supabase
-      .from('refund_requests')
+      .from("refund_requests")
       .update({ status })
-      .eq('id', id)
+      .eq("id", id)
       .select()
       .single();
 
     if (error) {
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error(error.message || JSON.stringify(error));
+      throw new Error(extractErrorMessage(error));
     }
 
     return data;
