@@ -36,7 +36,7 @@ describe("ReceiptUploader Base Component", () => {
 
     if (fileInput) {
       const clickSpy = vi.spyOn(fileInput, "click");
-      const dropzone = container.firstElementChild;
+      const dropzone = container.querySelector(".border-dashed");
       if (dropzone) {
         fireEvent.click(dropzone);
       }
