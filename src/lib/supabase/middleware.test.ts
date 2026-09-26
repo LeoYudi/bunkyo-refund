@@ -70,14 +70,14 @@ describe("Middleware (updateSession)", () => {
 
     const request = createMockRequest("/admin");
 
-    const response = (await updateSession(request)) as {
+    const response = (await updateSession(request)) as unknown as {
       type: string;
       url?: URL;
     };
 
     expect(mockGetUser).toHaveBeenCalled();
     expect(response.type).toBe("redirect");
-    expect(response.url.pathname).toBe("/login");
+    expect((response as any).url.pathname).toBe("/login");
   });
 
   it("should redirect to /login when accessing /admin/dashboard without session", async () => {
@@ -85,14 +85,14 @@ describe("Middleware (updateSession)", () => {
 
     const request = createMockRequest("/admin/dashboard");
 
-    const response = (await updateSession(request)) as {
+    const response = (await updateSession(request)) as unknown as {
       type: string;
       url?: URL;
     };
 
     expect(mockGetUser).toHaveBeenCalled();
     expect(response.type).toBe("redirect");
-    expect(response.url.pathname).toBe("/login");
+    expect((response as any).url.pathname).toBe("/login");
   });
 
   it("should allow access to /admin when session exists", async () => {
@@ -100,7 +100,7 @@ describe("Middleware (updateSession)", () => {
 
     const request = createMockRequest("/admin/dashboard");
 
-    const response = (await updateSession(request)) as {
+    const response = (await updateSession(request)) as unknown as {
       type: string;
       url?: URL;
     };
@@ -114,7 +114,7 @@ describe("Middleware (updateSession)", () => {
 
     const request = createMockRequest("/public-page");
 
-    const response = (await updateSession(request)) as {
+    const response = (await updateSession(request)) as unknown as {
       type: string;
       url?: URL;
     };
@@ -128,7 +128,7 @@ describe("Middleware (updateSession)", () => {
 
     const request = createMockRequest("/admin-login");
 
-    const response = (await updateSession(request)) as {
+    const response = (await updateSession(request)) as unknown as {
       type: string;
       url?: URL;
     };

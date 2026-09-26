@@ -7,6 +7,10 @@ import type { CreateRefundSchema } from "@/models/refund.model";
 import { RefundRepository } from "@/repositories/refund.repository";
 import { getRefundRequestsAction, submitRefundRequest } from "./refund.actions";
 
+vi.mock("next/cache", () => ({
+  revalidatePath: vi.fn(),
+}));
+
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
