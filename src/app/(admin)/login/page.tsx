@@ -2,17 +2,52 @@
 
 import { AdminLoginForm } from "@/components/forms/admin-login-form";
 import { toast } from "@/components/ui/toast";
+import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 
 export default function AdminLoginPage() {
+  const router = useRouter();
+
   const handleLogin = async (data: { email: string; password: string }) => {
-    // Aqui vai entrar a Server Action de Login com Supabase no futuro
-    console.log("Tentativa de login com:", data);
-    toast.add({
-      type: "info",
-      title: "Autenticação em breve",
-      description:
-        "A integração com Supabase Auth será feita no próximo passo.",
+    const supabase = createClient();
+    
+    if (data.email === "google") {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?next=/admin`,
+        },
+      });
+      if (error) {
+        toast.add({
+          type: "error",
+          title: "Erro no login com Google",
+          description: error.message,
+        });
+      }
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: data.email,
+      password: data.password,
     });
+
+    if (error) {
+      toast.add({
+        type: "error",
+        title: "Erro ao entrar",
+        description: error.message,
+      });
+      return;
+    }
+
+    toast.add({
+      type: "success",
+      title: "Login realizado com sucesso",
+      description: "Redirecionando...",
+    });
+    router.push("/admin");
   };
 
   return (
