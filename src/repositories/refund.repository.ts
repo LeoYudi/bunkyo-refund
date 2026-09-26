@@ -89,4 +89,18 @@ export class RefundRepository {
 
     return data;
   }
+
+  async findAll(): Promise<RefundRequest[]> {
+    const supabase = await this.getClient();
+    const { data, error } = await supabase
+      .from("refund_requests")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      throw new Error(extractErrorMessage(error));
+    }
+
+    return data;
+  }
 }

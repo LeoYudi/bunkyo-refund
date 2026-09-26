@@ -270,4 +270,60 @@ describe("RefundRepository", () => {
       );
     });
   });
+
+  describe("findAll", () => {
+    it("should fetch all refund requests ordered by created_at descending", async () => {
+      const mockSupabase = {
+        from: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({
+          data: [
+            {
+              id: "1",
+              requester_name: "John Doe",
+              status: "PENDING",
+              created_at: new Date().toISOString(),
+            },
+            {
+              id: "2",
+              requester_name: "Jane Doe",
+              status: "APPROVED",
+              created_at: new Date().toISOString(),
+            },
+          ],
+          error: null,
+        }),
+      };
+
+      mockCreateClient(mockSupabase);
+
+      const result = await repository.findAll();
+
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe("1");
+      expect(result[1].id).toBe("2");
+
+      expect(createClient).toHaveBeenCalled();
+      expect(mockSupabase.from).toHaveBeenCalledWith("refund_requests");
+      expect(mockSupabase.select).toHaveBeenCalledWith("*");
+      expect(mockSupabase.order).toHaveBeenCalledWith("created_at", {
+        ascending: false,
+      });
+    });
+
+    it("should throw an error when supabase returns an error", async () => {
+      const mockSupabase = {
+        from: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({
+          data: null,
+          error: new Error("Supabase error"),
+        }),
+      };
+
+      mockCreateClient(mockSupabase);
+
+      await expect(repository.findAll()).rejects.toThrow("Supabase error");
+    });
+  });
 });
