@@ -46,13 +46,15 @@ describe("AdminSidebar Component", () => {
     expect(solicitacoesLink).toHaveAttribute("href", "/admin/requests");
   });
 
-  it("deve renderizar o botão 'Sair' e chamar a action de logout", () => {
+  it("deve renderizar o botão 'Sair' e chamar a action de logout", async () => {
     render(<AdminSidebar />);
 
     const logoutButton = screen.getByRole("button", { name: /sair/i });
     expect(logoutButton).toBeInTheDocument();
 
     fireEvent.click(logoutButton);
+
+    await screen.findByRole("button", { name: /sair/i }); // Just wait a bit if needed, or better:
     expect(logoutAction).toHaveBeenCalledTimes(1);
   });
 });
