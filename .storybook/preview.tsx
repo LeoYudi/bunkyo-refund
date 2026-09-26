@@ -13,17 +13,33 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
+
+const mockRouter = {
+  push: () => {},
+  replace: () => {},
+  prefetch: () => {},
+  back: () => {},
+  forward: () => {},
+  refresh: () => {},
+};
+
 const preview: Preview = {
   decorators: [
     (Story) => (
-      <div
-        className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
-      >
-        <Story />
-      </div>
+      <AppRouterContext.Provider value={mockRouter as any}>
+        <div
+          className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
+        >
+          <Story />
+        </div>
+      </AppRouterContext.Provider>
     ),
   ],
   parameters: {
+    nextjs: {
+      appDirectory: true,
+    },
     controls: {
       matchers: {
         color: /(background|color)$/i,
