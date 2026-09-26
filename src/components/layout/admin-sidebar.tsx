@@ -2,7 +2,6 @@
 
 import {
   CircleUser,
-  FileText,
   LayoutDashboard,
   LogOut,
   Settings,
@@ -25,7 +24,6 @@ export function AdminSidebar() {
 
   const navItems = [
     { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
-    { name: "Solicitações", href: "/admin/requests", icon: FileText },
   ];
 
   const secondaryNavItems = [

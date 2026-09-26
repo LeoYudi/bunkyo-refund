@@ -8,7 +8,8 @@
     "start": "next start",
     "test": "vitest run",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "db:fix-storage": "docker exec supabase_db_bunkyo-refund-project psql -U supabase_admin -d postgres -c 'ALTER TABLE storage.objects ADD CONSTRAINT bucketid_objname UNIQUE (bucket_id, name);'"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
