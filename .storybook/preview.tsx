@@ -13,7 +13,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import {
+  AppRouterContext,
+  type AppRouterInstance,
+} from "next/dist/shared/lib/app-router-context.shared-runtime";
 
 const mockRouter = {
   push: () => {},
@@ -28,7 +31,9 @@ const preview: Preview = {
   decorators: [
     (Story) => {
       return (
-        <AppRouterContext.Provider value={mockRouter as any}>
+        <AppRouterContext.Provider
+          value={mockRouter as unknown as AppRouterInstance}
+        >
           <div
             className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
           >
