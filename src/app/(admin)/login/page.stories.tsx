@@ -6,6 +6,9 @@ const meta = {
   component: AdminLoginPage,
   parameters: {
     layout: "fullscreen",
+    nextjs: {
+      appDirectory: true,
+    },
   },
 } satisfies Meta<typeof AdminLoginPage>;
 

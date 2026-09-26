@@ -1,16 +1,16 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { AdminLoginForm } from "@/components/forms/admin-login-form";
 import { toast } from "@/components/ui/toast";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 
 export default function AdminLoginPage() {
   const router = useRouter();
 
   const handleLogin = async (data: { email: string; password: string }) => {
     const supabase = createClient();
-    
+
     if (data.email === "google") {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
