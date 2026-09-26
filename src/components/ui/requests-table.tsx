@@ -21,20 +21,28 @@ export function RequestsTable({ requests }: { requests: RefundRequest[] }) {
           </tr>
         </thead>
         <tbody>
-          {requests.map((req) => (
-            <tr
-              key={req.id}
-              className="bg-white border-b dark:bg-gray-800 dark:border-gray-700"
-            >
-              <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">
-                {req.requester_name}
-              </td>
-              <td className="px-6 py-4">{req.status}</td>
-              <td className="px-6 py-4">
-                {new Date(req.created_at).toLocaleDateString()}
+          {requests.length === 0 ? (
+            <tr>
+              <td colSpan={3} className="px-6 py-8 text-center text-gray-500">
+                Nenhuma solicitação encontrada.
               </td>
             </tr>
-          ))}
+          ) : (
+            requests.map((req) => (
+              <tr
+                key={req.id}
+                className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+              >
+                <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">
+                  {req.requester_name}
+                </td>
+                <td className="px-6 py-4">{req.status}</td>
+                <td className="px-6 py-4">
+                  {new Date(req.created_at).toLocaleDateString()}
+                </td>
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
     </div>
