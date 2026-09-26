@@ -58,8 +58,6 @@ BEGIN
         current_timestamp
     );
 
-    INSERT INTO public.profiles (id, email, role)
-    VALUES (new_user_id, 'admin@bunkyo.org.br', 'ADMIN');
 END $$;
 
 -- Insert mock refund requests
