@@ -24,8 +24,8 @@ BEGIN
         new_user_id,
         'authenticated',
         'authenticated',
-        'lyhiguti@gmail.com',
-        crypt('Admin12#', gen_salt('bf')),
+        'admin@bunkyo.org.br',
+        crypt('Admin123!', gen_salt('bf')),
         current_timestamp,
         current_timestamp,
         current_timestamp,
@@ -51,7 +51,7 @@ BEGIN
         gen_random_uuid(),
         new_user_id,
         new_user_id,
-        format('{"sub":"%s","email":"%s"}', new_user_id, 'lyhiguti@gmail.com')::jsonb,
+        format('{"sub":"%s","email":"%s"}', new_user_id, 'admin@bunkyo.org.br')::jsonb,
         'email',
         current_timestamp,
         current_timestamp,
@@ -59,5 +59,5 @@ BEGIN
     );
 
     INSERT INTO public.profiles (id, email, role)
-    VALUES (new_user_id, 'lyhiguti@gmail.com', 'ADMIN');
+    VALUES (new_user_id, 'admin@bunkyo.org.br', 'ADMIN');
 END $$;
