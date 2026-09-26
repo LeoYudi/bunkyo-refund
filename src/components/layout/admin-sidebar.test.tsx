@@ -28,7 +28,7 @@ vi.mock("next/link", () => ({
   },
 }));
 
-// Mock da action de logout (suposição de onde ficará)
+// Mock da action de logout
 vi.mock("@/actions/auth.actions", () => ({
   logoutAction: vi.fn(),
 }));
@@ -36,14 +36,11 @@ vi.mock("@/actions/auth.actions", () => ({
 import { logoutAction } from "@/actions/auth.actions";
 
 describe("AdminSidebar Component", () => {
-  it("deve renderizar o link 'Solicitações'", () => {
+  it("deve renderizar o link 'Dashboard'", () => {
     render(<AdminSidebar />);
-
-    const solicitacoesLink = screen.getByRole("link", {
-      name: /solicitações/i,
-    });
-    expect(solicitacoesLink).toBeInTheDocument();
-    expect(solicitacoesLink).toHaveAttribute("href", "/admin/requests");
+    const dashboardLink = screen.getByRole("link", { name: /dashboard/i });
+    expect(dashboardLink).toBeInTheDocument();
+    expect(dashboardLink).toHaveAttribute("href", "/admin");
   });
 
   it("deve renderizar o botão 'Sair' e chamar a action de logout", async () => {
@@ -54,7 +51,7 @@ describe("AdminSidebar Component", () => {
 
     fireEvent.click(logoutButton);
 
-    await screen.findByRole("button", { name: /sair/i }); // Just wait a bit if needed, or better:
+    await screen.findByRole("button", { name: /sair/i });
     expect(logoutAction).toHaveBeenCalledTimes(1);
   });
 });
