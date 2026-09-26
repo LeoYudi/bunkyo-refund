@@ -14,7 +14,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   args: {
-    onSubmitAction: async (formData) => {
+    onSubmitAction: async (formData: FormData) => {
       console.log(
         "Form submitted with:",
         Object.fromEntries(formData.entries()),

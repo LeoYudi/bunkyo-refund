@@ -5,7 +5,11 @@ import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/models/database.types";
 import type { CreateRefundSchema } from "@/models/refund.model";
 import { RefundRepository } from "@/repositories/refund.repository";
-import { submitRefundRequest } from "./refund.actions";
+import { getRefundRequestsAction, submitRefundRequest } from "./refund.actions";
+
+vi.mock("next/cache", () => ({
+  revalidatePath: vi.fn(),
+}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
@@ -19,7 +23,10 @@ vi.mock("@/repositories/refund.repository", () => {
 
 describe("submitRefundRequest", () => {
   const mockSupabaseClient = {} as unknown as SupabaseClient<Database>;
-  let mockRepositoryInstance: { create: ReturnType<typeof vi.fn> };
+  let mockRepositoryInstance: {
+    create: ReturnType<typeof vi.fn>;
+    findAll: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -28,6 +35,7 @@ describe("submitRefundRequest", () => {
     // Setup mock repository instance and its methods
     mockRepositoryInstance = {
       create: vi.fn(),
+      findAll: vi.fn(),
     };
     // biome-ignore lint/complexity/useArrowFunction: constructor mock requires function
     vi.mocked(RefundRepository).mockImplementation(function () {
@@ -99,5 +107,43 @@ describe("submitRefundRequest", () => {
 
     expect(result).toEqual({ success: false, error: "DB Connection Failed" });
     expect(mockRepositoryInstance.create).toHaveBeenCalled();
+  });
+});
+
+describe("getRefundRequestsAction", () => {
+  const mockSupabaseClient = {} as unknown as SupabaseClient<Database>;
+  let mockRepositoryInstance: { findAll: ReturnType<typeof vi.fn> };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(createClient).mockResolvedValue(mockSupabaseClient);
+
+    mockRepositoryInstance = {
+      findAll: vi.fn(),
+    };
+    // biome-ignore lint/complexity/useArrowFunction: constructor mock requires function
+    vi.mocked(RefundRepository).mockImplementation(function () {
+      return mockRepositoryInstance as unknown as RefundRepository;
+    });
+  });
+
+  it("should return successfully fetched requests", async () => {
+    const mockRequests = [{ id: "1", status: "PENDING" }];
+    mockRepositoryInstance.findAll.mockResolvedValue(mockRequests);
+
+    const result = await getRefundRequestsAction();
+
+    expect(createClient).toHaveBeenCalled();
+    expect(RefundRepository).toHaveBeenCalledWith(mockSupabaseClient);
+    expect(mockRepositoryInstance.findAll).toHaveBeenCalled();
+    expect(result).toEqual({ success: true, data: mockRequests });
+  });
+
+  it("should handle error when fetching requests", async () => {
+    mockRepositoryInstance.findAll.mockRejectedValue(new Error("Fetch failed"));
+
+    const result = await getRefundRequestsAction();
+
+    expect(result).toEqual({ success: false, error: "Fetch failed" });
   });
 });
