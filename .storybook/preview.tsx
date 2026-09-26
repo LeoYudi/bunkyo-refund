@@ -26,15 +26,17 @@ const mockRouter = {
 
 const preview: Preview = {
   decorators: [
-    (Story) => (
-      <AppRouterContext.Provider value={mockRouter as any}>
-        <div
-          className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
-        >
-          <Story />
-        </div>
-      </AppRouterContext.Provider>
-    ),
+    (Story) => {
+      return (
+        <AppRouterContext.Provider value={mockRouter as any}>
+          <div
+            className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
+          >
+            <Story />
+          </div>
+        </AppRouterContext.Provider>
+      );
+    },
   ],
   parameters: {
     nextjs: {
