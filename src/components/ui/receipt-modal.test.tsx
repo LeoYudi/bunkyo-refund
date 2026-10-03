@@ -81,7 +81,8 @@ describe("ReceiptModal", () => {
       const heading = screen.getByRole("heading", {
         name: "Visualização de Comprovante",
       });
-      const header = heading.parentElement;
+      // Account for the new inner div wrapper in DialogHeader
+      const header = heading.parentElement?.parentElement;
       expect(header).toBeInTheDocument();
 
       const link = within(header as HTMLElement).getByRole("link", {
