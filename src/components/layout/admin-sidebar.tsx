@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  CircleUser,
-  LayoutDashboard,
-  LogOut,
-  Settings,
-} from "lucide-react";
+import { CircleUser, LayoutDashboard, LogOut, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTransition } from "react";

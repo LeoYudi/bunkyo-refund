@@ -9,7 +9,7 @@ const meta = {
     layout: "fullscreen",
   },
   decorators: [
-    (Story: any) => (
+    (Story: React.ComponentType) => (
       <div className="flex bg-background min-h-screen">
         <Story />
       </div>

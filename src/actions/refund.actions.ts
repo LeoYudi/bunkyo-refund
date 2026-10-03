@@ -1,7 +1,7 @@
 "use server";
 
-import type { z } from "zod";
 import { revalidatePath } from "next/cache";
+import type { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { RefundSchema } from "@/models/refund.model";
 import { CreateRefundSchema } from "@/models/refund.model";
@@ -24,10 +24,10 @@ export async function submitRefundRequest(
     const supabase = await createClient();
     const repository = new RefundRepository(supabase);
     const data = await repository.create(validationResult.data);
-    
+
     // Purge the client-side router cache for the admin dashboard
     revalidatePath("/admin");
-    
+
     return { success: true, data };
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);

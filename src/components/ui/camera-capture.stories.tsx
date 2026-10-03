@@ -16,7 +16,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   args: {
     onCapture: () => {},
-  }
+  },
 };
 
 export const Disabled: Story = {
