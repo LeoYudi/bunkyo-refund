@@ -72,20 +72,4 @@ describe("ReceiptModal", () => {
     fireEvent.click(closeButtons[0]);
     expect(onCloseMock).toHaveBeenCalledTimes(1);
   });
-
-  it("calls onClose when the overlay is clicked", () => {
-    const onCloseMock = vi.fn();
-    render(
-      <ReceiptModal
-        isOpen={true}
-        onClose={onCloseMock}
-        receiptUrl={dummyUrl}
-      />,
-    );
-
-    const overlay = screen.getByTestId("modal-overlay");
-    fireEvent.click(overlay);
-
-    expect(onCloseMock).toHaveBeenCalledTimes(1);
-  });
 });

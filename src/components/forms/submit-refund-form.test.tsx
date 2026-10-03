@@ -69,10 +69,12 @@ describe("SubmitRefundForm", () => {
     });
     fireEvent.click(cancelButton);
 
-    expect(
-      screen.getByText(/arraste e solte o comprovante aqui/i),
-    ).toBeInTheDocument();
-    expect(screen.queryByText("receipt.png")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.getByText(/arraste e solte o comprovante aqui/i),
+      ).toBeInTheDocument();
+      expect(screen.queryByText("receipt.png")).not.toBeInTheDocument();
+    });
   });
 
   it("triggers validation errors if 'Nome Completo' is empty on submit", async () => {

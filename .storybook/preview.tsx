@@ -28,15 +28,29 @@ const mockRouter = {
 };
 
 const preview: Preview = {
+  tags: ["autodocs"],
+
   decorators: [
     (Story) => {
       return (
         <AppRouterContext.Provider
           value={mockRouter as unknown as AppRouterInstance}
         >
-          <div
-            className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
-          >
+          <style
+            // biome-ignore lint/security/noDangerouslySetInnerHtml: safe injection
+            dangerouslySetInnerHTML={{
+              __html: `
+            :root {
+              --font-geist-sans: ${geistSans.style.fontFamily};
+              --font-geist-mono: ${geistMono.style.fontFamily};
+            }
+            body {
+              font-family: var(--font-geist-sans), sans-serif;
+            }
+          `,
+            }}
+          />
+          <div className="font-sans antialiased">
             <Story />
           </div>
         </AppRouterContext.Provider>
