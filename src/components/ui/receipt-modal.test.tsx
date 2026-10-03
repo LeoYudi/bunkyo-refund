@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ReceiptModal } from "./receipt-modal";
 
@@ -66,10 +66,10 @@ describe("ReceiptModal", () => {
     );
 
     // Assuming the developer adds a button specifically for closing
-    const closeButtons = screen.getAllByRole("button");
-    expect(closeButtons.length).toBeGreaterThan(0);
+    const closeButton = screen.getByRole("button", { name: /fechar modal/i });
+    expect(closeButton).toBeInTheDocument();
 
-    fireEvent.click(closeButtons[0]);
+    fireEvent.click(closeButton);
     expect(onCloseMock).toHaveBeenCalledTimes(1);
   });
   describe("Download button", () => {
@@ -85,26 +85,48 @@ describe("ReceiptModal", () => {
       const header = heading.parentElement?.parentElement;
       expect(header).toBeInTheDocument();
 
-      const link = within(header as HTMLElement).getByRole("link", {
+      const link = within(header as HTMLElement).getByRole("button", {
         name: /baixar comprovante/i,
       });
       expect(link).toBeInTheDocument();
     });
 
-    it("has the correct href and download attributes", () => {
+    it("triggers fetch and URL generation when download button is clicked", async () => {
+      // Setup fetch mock
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        blob: vi.fn().mockResolvedValue(new Blob(["dummy"], { type: "application/pdf" })),
+      });
+      global.URL.createObjectURL = vi.fn().mockReturnValue("blob:dummy-url");
+      global.URL.revokeObjectURL = vi.fn();
+
       render(
         <ReceiptModal isOpen={true} onClose={vi.fn()} receiptUrl={dummyUrl} />,
       );
-      const link = screen.getByRole("link", { name: /baixar comprovante/i });
-      expect(link).toHaveAttribute("href", dummyUrl);
-      expect(link).toHaveAttribute("download");
+      // Mock document.createElement to intercept the 'a' tag click and prevent navigation error in jsdom
+      const originalCreateElement = document.createElement.bind(document);
+      const mockClick = vi.fn();
+      vi.spyOn(document, 'createElement').mockImplementation((tagName) => {
+        const el = originalCreateElement(tagName);
+        if (tagName === 'a') {
+          el.click = mockClick;
+        }
+        return el;
+      });
+
+      const btn = screen.getByRole("button", { name: /baixar comprovante/i });
+      fireEvent.click(btn);
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(dummyUrl);
+      });
     });
 
     it("is not rendered if receiptUrl is null", () => {
       render(
         <ReceiptModal isOpen={true} onClose={vi.fn()} receiptUrl={null} />,
       );
-      const link = screen.queryByRole("link", { name: /baixar comprovante/i });
+      const link = screen.queryByRole("button", { name: /baixar comprovante/i });
       expect(link).not.toBeInTheDocument();
     });
   });

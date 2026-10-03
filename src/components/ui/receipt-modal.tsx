@@ -1,6 +1,7 @@
 "use client";
 
-import { Download, X } from "lucide-react";
+import { useState } from "react";
+import { Download, Loader2, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +21,33 @@ export function ReceiptModal({
   onClose,
   receiptUrl,
 }: ReceiptModalProps) {
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    if (!receiptUrl) return;
+    try {
+      setIsDownloading(true);
+      const response = await fetch(receiptUrl);
+      if (!response.ok) throw new Error("Erro ao baixar o arquivo");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const filename = receiptUrl.split("/").pop()?.split("?")[0] || "comprovante";
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error("Falha no download:", error);
+      // Fallback in case of CORS error
+      window.open(receiptUrl, "_blank", "noopener,noreferrer");
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   const isImage =
     receiptUrl !== null &&
     (/\.(png|jpg|jpeg|webp|gif)(\?.*)?$/i.test(receiptUrl) ||
@@ -40,16 +68,19 @@ export function ReceiptModal({
           </div>
           <div className="flex items-center gap-1">
             {!!receiptUrl && (
-              <a
-                href={receiptUrl}
-                download
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={handleDownload}
+                disabled={isDownloading}
                 aria-label="Baixar comprovante"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
               >
-                <Download className="h-4 w-4" />
-              </a>
+                {isDownloading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+              </button>
             )}
             <button
               type="button"
