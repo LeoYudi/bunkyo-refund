@@ -9,11 +9,12 @@ async function main() {
   }
 
   const supabase = createClient(url, key);
-  
-  const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-    email: "admin@bunkyo.org.br",
-    password: "Admin123!",
-  });
+
+  const { data: authData, error: authError } =
+    await supabase.auth.signInWithPassword({
+      email: "admin@bunkyo.org.br",
+      password: "Admin123!",
+    });
 
   if (authError) {
     console.error("Auth error:", authError);

@@ -77,7 +77,7 @@ describe("Middleware (updateSession)", () => {
 
     expect(mockGetUser).toHaveBeenCalled();
     expect(response.type).toBe("redirect");
-    expect((response as any).url.pathname).toBe("/login");
+    expect((response as unknown as { url: URL }).url.pathname).toBe("/login");
   });
 
   it("should redirect to /login when accessing /admin/dashboard without session", async () => {
@@ -92,7 +92,7 @@ describe("Middleware (updateSession)", () => {
 
     expect(mockGetUser).toHaveBeenCalled();
     expect(response.type).toBe("redirect");
-    expect((response as any).url.pathname).toBe("/login");
+    expect((response as unknown as { url: URL }).url.pathname).toBe("/login");
   });
 
   it("should allow access to /admin when session exists", async () => {

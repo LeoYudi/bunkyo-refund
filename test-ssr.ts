@@ -11,7 +11,7 @@ async function main() {
   const client = createClient(url, key);
   const { data: authData } = await client.auth.signInWithPassword({
     email: "admin@bunkyo.org.br",
-    password: "Admin123!"
+    password: "Admin123!",
   });
 
   const session = authData.session;
@@ -25,24 +25,27 @@ async function main() {
   // Supabase stores session as a chunked cookie 'sb-[ref]-auth-token'
   // But wait, signInWithPassword on @supabase/supabase-js doesn't set cookies directly unless we mock it or extract it.
   // Actually, we can just use setSession on the SSR client.
-  
+
   const ssrClient = createServerClient<Database>(url, key, {
     cookies: {
       getAll: () => {
-        return Array.from(cookiesMap.entries()).map(([name, value]) => ({ name, value }));
+        return Array.from(cookiesMap.entries()).map(([name, value]) => ({
+          name,
+          value,
+        }));
       },
       setAll: (cookiesToSet) => {
         cookiesToSet.forEach(({ name, value }) => {
           cookiesMap.set(name, value);
         });
-      }
-    }
+      },
+    },
   });
 
   // Set the session into the SSR client so it writes to our mocked cookies
   await ssrClient.auth.setSession({
     access_token: session.access_token,
-    refresh_token: session.refresh_token
+    refresh_token: session.refresh_token,
   });
 
   // 3. Query
