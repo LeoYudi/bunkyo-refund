@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ReceiptModal } from "./receipt-modal";
 
@@ -71,5 +71,40 @@ describe("ReceiptModal", () => {
 
     fireEvent.click(closeButtons[0]);
     expect(onCloseMock).toHaveBeenCalledTimes(1);
+  });
+  describe("Download button", () => {
+    it("renders a download link in the modal header when isOpen is true and receiptUrl is provided", () => {
+      render(
+        <ReceiptModal isOpen={true} onClose={vi.fn()} receiptUrl={dummyUrl} />,
+      );
+
+      const heading = screen.getByRole("heading", {
+        name: "Visualização de Comprovante",
+      });
+      const header = heading.parentElement;
+      expect(header).toBeInTheDocument();
+
+      const link = within(header as HTMLElement).getByRole("link", {
+        name: /baixar comprovante/i,
+      });
+      expect(link).toBeInTheDocument();
+    });
+
+    it("has the correct href and download attributes", () => {
+      render(
+        <ReceiptModal isOpen={true} onClose={vi.fn()} receiptUrl={dummyUrl} />,
+      );
+      const link = screen.getByRole("link", { name: /baixar comprovante/i });
+      expect(link).toHaveAttribute("href", dummyUrl);
+      expect(link).toHaveAttribute("download");
+    });
+
+    it("is not rendered if receiptUrl is null", () => {
+      render(
+        <ReceiptModal isOpen={true} onClose={vi.fn()} receiptUrl={null} />,
+      );
+      const link = screen.queryByRole("link", { name: /baixar comprovante/i });
+      expect(link).not.toBeInTheDocument();
+    });
   });
 });

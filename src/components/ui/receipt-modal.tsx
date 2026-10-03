@@ -1,5 +1,6 @@
 "use client";
 
+import { Download } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -27,11 +28,23 @@ export function ReceiptModal({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-5xl h-[92vh] flex flex-col overflow-hidden p-0 gap-0">
-        <DialogHeader className="px-6 py-4 border-b border-border bg-muted/30 shrink-0">
+        <DialogHeader className="px-6 py-4 border-b border-border bg-muted/30 shrink-0 relative pr-24">
           <DialogTitle>Visualização de Comprovante</DialogTitle>
           <DialogDescription className="sr-only">
             Visualize a nota fiscal ou comprovante anexado.
           </DialogDescription>
+          {!!receiptUrl && (
+            <a
+              href={receiptUrl}
+              download
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Baixar comprovante"
+              className="absolute right-12 top-2.5 inline-flex items-center justify-center rounded-md p-2 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Download className="h-4 w-4" />
+            </a>
+          )}
         </DialogHeader>
 
         <div className="p-6 flex-1 overflow-auto flex items-center justify-center bg-muted/10">
