@@ -43,3 +43,13 @@ export const RefundSchema = z.object({
   issue_number: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
 });
+
+export const ReceiptAIExtractionSchema = z.object({
+  issuer_name: z.string().nullable(),
+  issuer_cnpj: z.string().nullable(),
+  receiver_cnpj: z.string().nullable(),
+  total_value: z.number().nullable(),
+  issue_date: z.string().nullable(),
+  issue_number: z.string().nullable(),
+  description: z.string().nullable(),
+});

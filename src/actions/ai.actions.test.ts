@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { processReceiptAction } from "./ai.actions";
 
 // Mocking the AI service
@@ -16,7 +16,9 @@ vi.mock("../services/ai.service", () => ({
 
 describe("processReceiptAction", () => {
   it("should return structured output from Gemini", async () => {
-    const result = await processReceiptAction("https://example.com/receipt.pdf");
+    const result = await processReceiptAction(
+      "https://example.com/receipt.pdf",
+    );
     expect(result.success).toBe(true);
     expect(result.data?.issuer_name).toBe("Test Company");
   });
