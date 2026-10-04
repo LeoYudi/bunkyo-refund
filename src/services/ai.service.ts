@@ -1,28 +1,17 @@
-import { GoogleGenAI, Type, Schema } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
+import { z } from "zod";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-const receiptSchema: Schema = {
-  type: Type.OBJECT,
-  properties: {
-    issuer_name: { type: Type.STRING },
-    issuer_cnpj: { type: Type.STRING },
-    receiver_cnpj: { type: Type.STRING },
-    total_value: { type: Type.NUMBER },
-    issue_date: { type: Type.STRING },
-    issue_number: { type: Type.STRING },
-    description: { type: Type.STRING },
-  },
-  required: [
-    "issuer_name",
-    "issuer_cnpj",
-    "receiver_cnpj",
-    "total_value",
-    "issue_date",
-    "issue_number",
-    "description",
-  ],
-};
+const receiptSchema = z.object({
+  issuer_name: z.string().describe("Name of the issuer"),
+  issuer_cnpj: z.string().describe("CNPJ of the issuer"),
+  receiver_cnpj: z.string().describe("CNPJ of the receiver"),
+  total_value: z.number().describe("Total value of the receipt"),
+  issue_date: z.string().describe("Date of issue in YYYY-MM-DD format"),
+  issue_number: z.string().describe("Issue number of the receipt"),
+  description: z.string().describe("Description of the receipt"),
+});
 
 export async function processReceiptWithGemini(fileUrl: string) {
   // Assuming fileUrl is a public URL we can fetch or pass to Gemini
@@ -32,7 +21,7 @@ export async function processReceiptWithGemini(fileUrl: string) {
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: [
-      { text: `Extraia as informações desta nota fiscal (disponível na URL: ${fileUrl}). Retorne apenas JSON contendo os seguintes campos: issuer_name, issuer_cnpj, receiver_cnpj, total_value, issue_date, issue_number, description.` }
+      { text: `Extraia as informações desta nota fiscal (disponível na URL: ${fileUrl}). Retorne apenas JSON.` }
     ],
     config: {
       responseMimeType: "application/json",
