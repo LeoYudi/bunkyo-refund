@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { Download, Loader2, X } from "lucide-react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -14,12 +14,14 @@ export interface ReceiptModalProps {
   isOpen: boolean;
   onClose: () => void;
   receiptUrl: string | null;
+  onDownload?: (url: string) => void | Promise<void>;
 }
 
 export function ReceiptModal({
   isOpen,
   onClose,
   receiptUrl,
+  onDownload,
 }: ReceiptModalProps) {
   const [isDownloading, setIsDownloading] = useState(false);
 
@@ -27,13 +29,18 @@ export function ReceiptModal({
     if (!receiptUrl) return;
     try {
       setIsDownloading(true);
+      if (onDownload) {
+        await onDownload(receiptUrl);
+        return;
+      }
       const response = await fetch(receiptUrl);
       if (!response.ok) throw new Error("Erro ao baixar o arquivo");
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      const filename = receiptUrl.split("/").pop()?.split("?")[0] || "comprovante";
+      const filename =
+        receiptUrl.split("/").pop()?.split("?")[0] || "comprovante";
       a.download = filename;
       document.body.appendChild(a);
       a.click();

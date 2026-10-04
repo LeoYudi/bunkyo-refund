@@ -7,6 +7,7 @@ const meta = {
   tags: ["autodocs"],
   argTypes: {
     onClose: { action: "onClose" },
+    onDownload: { action: "onDownload" },
   },
 } satisfies Meta<typeof ReceiptModal>;
 

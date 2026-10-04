@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, within, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ReceiptModal } from "./receipt-modal";
 
@@ -95,7 +101,9 @@ describe("ReceiptModal", () => {
       // Setup fetch mock
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
-        blob: vi.fn().mockResolvedValue(new Blob(["dummy"], { type: "application/pdf" })),
+        blob: vi
+          .fn()
+          .mockResolvedValue(new Blob(["dummy"], { type: "application/pdf" })),
       });
       global.URL.createObjectURL = vi.fn().mockReturnValue("blob:dummy-url");
       global.URL.revokeObjectURL = vi.fn();
@@ -106,9 +114,9 @@ describe("ReceiptModal", () => {
       // Mock document.createElement to intercept the 'a' tag click and prevent navigation error in jsdom
       const originalCreateElement = document.createElement.bind(document);
       const mockClick = vi.fn();
-      vi.spyOn(document, 'createElement').mockImplementation((tagName) => {
+      vi.spyOn(document, "createElement").mockImplementation((tagName) => {
         const el = originalCreateElement(tagName);
-        if (tagName === 'a') {
+        if (tagName === "a") {
           el.click = mockClick;
         }
         return el;
@@ -126,7 +134,9 @@ describe("ReceiptModal", () => {
       render(
         <ReceiptModal isOpen={true} onClose={vi.fn()} receiptUrl={null} />,
       );
-      const link = screen.queryByRole("button", { name: /baixar comprovante/i });
+      const link = screen.queryByRole("button", {
+        name: /baixar comprovante/i,
+      });
       expect(link).not.toBeInTheDocument();
     });
   });
