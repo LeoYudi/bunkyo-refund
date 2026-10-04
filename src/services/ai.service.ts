@@ -32,7 +32,7 @@ export async function processReceiptWithGemini(fileUrl: string) {
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: [
-      { text: `Extraia as informações desta nota fiscal (disponível na URL: ${fileUrl}). Retorne apenas JSON.` }
+      { text: `Extraia as informações desta nota fiscal (disponível na URL: ${fileUrl}). Retorne apenas JSON contendo os seguintes campos: issuer_name, issuer_cnpj, receiver_cnpj, total_value, issue_date, issue_number, description.` }
     ],
     config: {
       responseMimeType: "application/json",
