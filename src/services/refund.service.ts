@@ -41,7 +41,7 @@ export class RefundService {
 
   async approveAndProcessReceipt(requestId: string): Promise<RefundRequest> {
     const request = await this.repository.findById(requestId);
-    if (!request || !request.receipt_file_url) {
+    if (!request?.receipt_file_url) {
       throw new Error("Solicitação de reembolso não encontrada");
     }
 
