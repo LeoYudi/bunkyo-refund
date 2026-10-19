@@ -90,6 +90,13 @@ export class RefundRepository {
     return data;
   }
 
+  async update(
+    _id: string,
+    _payload: Database["public"]["Tables"]["refund_requests"]["Update"],
+  ): Promise<RefundRequest> {
+    throw new Error("Method not implemented.");
+  }
+
   async findAll(): Promise<RefundRequest[]> {
     const supabase = await this.getClient();
     const { data, error } = await supabase

@@ -8,7 +8,15 @@ import { ReceiptModal } from "./receipt-modal";
 export type RefundRequest =
   Database["public"]["Tables"]["refund_requests"]["Row"];
 
-export function RequestsTable({ requests }: { requests: RefundRequest[] }) {
+export interface RequestsTableProps {
+  requests: RefundRequest[];
+  onProcessRequest?: (requestId: string) => Promise<void> | void;
+}
+
+export function RequestsTable({
+  requests,
+  onProcessRequest: _onProcessRequest,
+}: RequestsTableProps) {
   const [selectedReceiptUrl, setSelectedReceiptUrl] = useState<string | null>(
     null,
   );

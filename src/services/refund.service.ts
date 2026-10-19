@@ -20,7 +20,7 @@ export class RefundService {
       typeof repositoryOrClient === "object" &&
       ("create" in repositoryOrClient || "findAll" in repositoryOrClient)
     ) {
-      this.repository = repositoryOrClient as RefundRepository;
+      this.repository = repositoryOrClient as unknown as RefundRepository;
     } else {
       this.repository = new RefundRepository(
         repositoryOrClient as SupabaseClient<Database>,
@@ -36,5 +36,9 @@ export class RefundService {
 
   async getRefundRequests(): Promise<RefundRequest[]> {
     return this.repository.findAll();
+  }
+
+  async approveAndProcessReceipt(_requestId: string): Promise<RefundRequest> {
+    throw new Error("Method not implemented.");
   }
 }

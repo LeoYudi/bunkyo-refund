@@ -1,12 +1,9 @@
 "use server";
 
-import { processReceiptWithGemini } from "../services/ai.service";
+import type { RefundRequest } from "@/repositories/refund.repository";
 
-export async function processReceiptAction(fileUrl: string) {
-  try {
-    const data = await processReceiptWithGemini(fileUrl);
-    return { success: true, data };
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
+export async function processReceiptAction(
+  _requestId: string,
+): Promise<{ success: boolean; data?: RefundRequest; error?: string }> {
+  throw new Error("Method not implemented.");
 }

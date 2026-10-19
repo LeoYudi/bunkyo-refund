@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createClient } from "@/lib/supabase/server";
+import type { Database } from "@/models/database.types";
 import { RefundRepository } from "./refund.repository";
 
 // Mock Supabase client
@@ -324,6 +325,89 @@ describe("RefundRepository", () => {
       mockCreateClient(mockSupabase);
 
       await expect(repository.findAll()).rejects.toThrow("Supabase error");
+    });
+  });
+
+  describe("update", () => {
+    it("should update a refund request and return the updated record", async () => {
+      const mockUpdatedRecord = {
+        id: "123e4567-e89b-12d3-a456-426614174000",
+        requester_name: "John Doe",
+        receipt_file_url: "https://example.com/receipt.pdf",
+        status: "APPROVED" as const,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        description: "Almoço com cliente",
+        issue_date: "2026-09-25",
+        issue_number: "NF-123",
+        issuer_cnpj: "12345678000199",
+        issuer_name: "Restaurante Bunkyo",
+        receiver_cnpj: "98765432000199",
+        reviewed_by: null,
+        total_value: 150.5,
+      };
+
+      const mockSupabase = {
+        from: vi.fn().mockReturnThis(),
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: mockUpdatedRecord,
+          error: null,
+        }),
+      };
+
+      mockCreateClient(mockSupabase);
+
+      const payload: Database["public"]["Tables"]["refund_requests"]["Update"] =
+        {
+          status: "APPROVED",
+          issuer_name: "Restaurante Bunkyo",
+          issuer_cnpj: "12345678000199",
+          receiver_cnpj: "98765432000199",
+          total_value: 150.5,
+          issue_date: "2026-09-25",
+          issue_number: "NF-123",
+          description: "Almoço com cliente",
+        };
+
+      const result = await repository.update(
+        "123e4567-e89b-12d3-a456-426614174000",
+        payload,
+      );
+
+      expect(result).toEqual(mockUpdatedRecord);
+      expect(createClient).toHaveBeenCalled();
+      expect(mockSupabase.from).toHaveBeenCalledWith("refund_requests");
+      expect(mockSupabase.update).toHaveBeenCalledWith(payload);
+      expect(mockSupabase.eq).toHaveBeenCalledWith(
+        "id",
+        "123e4567-e89b-12d3-a456-426614174000",
+      );
+      expect(mockSupabase.select).toHaveBeenCalled();
+      expect(mockSupabase.single).toHaveBeenCalled();
+    });
+
+    it("should throw an error when supabase returns an error on update", async () => {
+      const mockSupabase = {
+        from: vi.fn().mockReturnThis(),
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: null,
+          error: new Error("Failed to update refund request"),
+        }),
+      };
+
+      mockCreateClient(mockSupabase);
+
+      await expect(
+        repository.update("123e4567-e89b-12d3-a456-426614174000", {
+          status: "APPROVED",
+        }),
+      ).rejects.toThrow("Failed to update refund request");
     });
   });
 });
