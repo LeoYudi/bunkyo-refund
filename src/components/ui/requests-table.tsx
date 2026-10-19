@@ -23,15 +23,23 @@ export function RequestsTable({
   );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleProcess = async (id: string) => {
     setProcessingId(id);
+    setErrorMessage(null);
     try {
+      let result: { success: boolean; error?: string } | undefined;
       if (onProcessRequest) {
         await onProcessRequest(id);
       } else {
-        await processReceiptAction(id);
+        result = await processReceiptAction(id);
       }
+      if (result && !result.success) {
+        setErrorMessage(result.error || "Erro ao processar solicitação");
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
     } finally {
       setProcessingId(null);
     }
@@ -39,6 +47,14 @@ export function RequestsTable({
 
   return (
     <div className="overflow-x-auto">
+      {errorMessage && (
+        <div
+          role="alert"
+          className="m-4 p-4 text-sm text-destructive bg-destructive/15 rounded-md"
+        >
+          {errorMessage}
+        </div>
+      )}
       <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
         <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
           <tr>

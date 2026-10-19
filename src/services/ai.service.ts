@@ -27,7 +27,7 @@ export async function processReceiptWithAI(
     input: [
       {
         type: "text",
-        text: "Extraia os dados da nota fiscal em anexo. Se um dado não existir, retorne null. Converta valores monetários para número real (padrão americano).",
+        text: "Extraia os dados da nota fiscal em anexo. Se um dado não existir, retorne null. Converta valores monetários para número real (padrão americano) e datas para o formato ISO YYYY-MM-DD.",
       },
       {
         type: fileInputType,

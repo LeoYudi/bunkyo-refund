@@ -49,7 +49,18 @@ export const ReceiptAIExtractionSchema = z.object({
   issuer_cnpj: z.string().nullable(),
   receiver_cnpj: z.string().nullable(),
   total_value: z.number().nullable(),
-  issue_date: z.string().nullable(),
+  issue_date: z
+    .string()
+    .nullable()
+    .transform((val) => {
+      if (!val) return val;
+      const match = val.match(/^(\d{2})[/-](\d{2})[/-](\d{4})$/);
+      if (match) {
+        const [, day, month, year] = match;
+        return `${year}-${month}-${day}`;
+      }
+      return val;
+    }),
   issue_number: z.string().nullable(),
   description: z.string().nullable(),
 });
