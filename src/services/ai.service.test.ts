@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import { createClient } from "@/lib/supabase/server";
 import { processReceiptWithAI } from "./ai.service";
 
@@ -13,10 +13,10 @@ vi.mock("@google/genai", () => ({
 }));
 
 describe("ai.service.ts - processReceiptWithAI", () => {
-  let mockSupabase: any;
-  let mockStorage: any;
-  let mockGoogleGenAI: any;
-  let mockInteractions: any;
+  let mockStorage: { from: Mock; download: Mock };
+  let mockSupabase: { storage: { from: Mock; download: Mock } };
+  let mockInteractions: { create: Mock };
+  let mockGoogleGenAI: { interactions: { create: Mock } };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -30,7 +30,9 @@ describe("ai.service.ts - processReceiptWithAI", () => {
       storage: mockStorage,
     };
 
-    (createClient as any).mockResolvedValue(mockSupabase);
+    vi.mocked(createClient).mockResolvedValue(
+      mockSupabase as unknown as Awaited<ReturnType<typeof createClient>>,
+    );
 
     mockInteractions = {
       create: vi.fn(),
@@ -41,8 +43,8 @@ describe("ai.service.ts - processReceiptWithAI", () => {
     };
 
     // biome-ignore lint/complexity/useArrowFunction: we need a constructor function to mock a class
-    (GoogleGenAI as any).mockImplementation(function () {
-      return mockGoogleGenAI;
+    vi.mocked(GoogleGenAI).mockImplementation(function () {
+      return mockGoogleGenAI as unknown as GoogleGenAI;
     });
   });
 
