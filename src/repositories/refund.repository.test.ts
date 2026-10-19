@@ -409,5 +409,29 @@ describe("RefundRepository", () => {
         }),
       ).rejects.toThrow("Failed to update refund request");
     });
+
+    it("should throw an error with error message when supabase returns a PostgrestError object", async () => {
+      const mockSupabase = {
+        from: vi.fn().mockReturnThis(),
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: null,
+          error: {
+            code: "23505",
+            message: "Database update constraint failed",
+          },
+        }),
+      };
+
+      mockCreateClient(mockSupabase);
+
+      await expect(
+        repository.update("123e4567-e89b-12d3-a456-426614174000", {
+          status: "APPROVED",
+        }),
+      ).rejects.toThrow("Database update constraint failed");
+    });
   });
 });

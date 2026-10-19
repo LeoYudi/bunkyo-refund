@@ -79,4 +79,18 @@ describe("processReceiptAction", () => {
       error: "Falha ao extrair dados da nota fiscal via IA",
     });
   });
+
+  it("should handle non-Error exceptions and return success false with stringified error", async () => {
+    mockApproveAndProcessReceipt.mockRejectedValue("Falha desconhecida");
+
+    const result = await processReceiptAction(
+      "123e4567-e89b-12d3-a456-426614174000",
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: "Falha desconhecida",
+    });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
 });

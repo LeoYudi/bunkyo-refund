@@ -1,7 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { processReceiptAction } from "@/actions/ai.actions";
 import type { Database } from "@/models/database.types";
 import { RequestsTable } from "./requests-table";
+
+vi.mock("@/actions/ai.actions", () => ({
+  processReceiptAction: vi.fn(),
+}));
 
 type RefundRequest = Database["public"]["Tables"]["refund_requests"]["Row"];
 
@@ -173,6 +178,54 @@ describe("RequestsTable", () => {
         reviewed_by: null,
         total_value: null,
       },
+      {
+        id: "req-4",
+        requester_name: "Daniel Lima",
+        status: "DENIED",
+        created_at: new Date("2026-09-28T10:00:00Z").toISOString(),
+        updated_at: new Date("2026-09-28T10:00:00Z").toISOString(),
+        description: null,
+        issue_date: null,
+        issue_number: null,
+        issuer_cnpj: null,
+        issuer_name: null,
+        receipt_file_url: "https://example.com/receipt4.pdf",
+        receiver_cnpj: null,
+        reviewed_by: null,
+        total_value: null,
+      },
+      {
+        id: "req-5",
+        requester_name: "Elena Ramos",
+        status: "SENT",
+        created_at: new Date("2026-09-29T10:00:00Z").toISOString(),
+        updated_at: new Date("2026-09-29T10:00:00Z").toISOString(),
+        description: null,
+        issue_date: null,
+        issue_number: null,
+        issuer_cnpj: null,
+        issuer_name: null,
+        receipt_file_url: "https://example.com/receipt5.pdf",
+        receiver_cnpj: null,
+        reviewed_by: null,
+        total_value: null,
+      },
+      {
+        id: "req-6",
+        requester_name: "Fabio Costa",
+        status: "PAID",
+        created_at: new Date("2026-09-30T10:00:00Z").toISOString(),
+        updated_at: new Date("2026-09-30T10:00:00Z").toISOString(),
+        description: null,
+        issue_date: null,
+        issue_number: null,
+        issuer_cnpj: null,
+        issuer_name: null,
+        receipt_file_url: "https://example.com/receipt6.pdf",
+        receiver_cnpj: null,
+        reviewed_by: null,
+        total_value: null,
+      },
     ];
 
     it("should render new Phase 4 column headers: Emissor, CNPJ, Valor Total, and Ações", () => {
@@ -184,6 +237,13 @@ describe("RequestsTable", () => {
       expect(screen.getByText("Ações")).toBeInTheDocument();
     });
 
+    it("should render empty state cell spanning all 8 columns when requests is empty", () => {
+      render(<RequestsTable requests={[]} />);
+
+      const emptyCell = screen.getByText("Nenhuma solicitação encontrada.");
+      expect(emptyCell).toHaveAttribute("colspan", "8");
+    });
+
     it("should display extracted data (issuer_name, issuer_cnpj, total_value in BRL currency) and '-' for null values", () => {
       render(<RequestsTable requests={mockDetailedRequests} />);
 
@@ -192,9 +252,9 @@ describe("RequestsTable", () => {
       expect(screen.getByText("12.345.678/0001-90")).toBeInTheDocument();
       expect(screen.getByText(/R\$\s*150,50/)).toBeInTheDocument();
 
-      // Null fields in req-2 and req-3 should display "-"
+      // Null fields in req-2 to req-6 should display "-"
       const dashes = screen.getAllByText("-");
-      expect(dashes.length).toBeGreaterThanOrEqual(3);
+      expect(dashes.length).toBeGreaterThanOrEqual(15);
     });
 
     it("should render 'Aprovar para Leitura' button only for requests with PENDING status", () => {
@@ -204,7 +264,7 @@ describe("RequestsTable", () => {
         name: /aprovar para leitura/i,
       });
 
-      // Only req-1 has status PENDING, while req-2 is APPROVED and req-3 is PROCESSING
+      // Only req-1 has status PENDING, while others are APPROVED, PROCESSING, DENIED, SENT, PAID
       expect(approveButtons).toHaveLength(1);
     });
 
@@ -225,6 +285,18 @@ describe("RequestsTable", () => {
 
       expect(onProcessRequestMock).toHaveBeenCalledTimes(1);
       expect(onProcessRequestMock).toHaveBeenCalledWith("req-1");
+    });
+
+    it("should call default processReceiptAction with request id when 'Aprovar para Leitura' is clicked and onProcessRequest is not provided", () => {
+      render(<RequestsTable requests={mockDetailedRequests} />);
+
+      const approveButton = screen.getByRole("button", {
+        name: /aprovar para leitura/i,
+      });
+      fireEvent.click(approveButton);
+
+      expect(processReceiptAction).toHaveBeenCalledTimes(1);
+      expect(processReceiptAction).toHaveBeenCalledWith("req-1");
     });
   });
 });
