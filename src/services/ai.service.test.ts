@@ -47,7 +47,7 @@ describe("ai.service.ts - processReceiptWithAI", () => {
   });
 
   const expectedPrompt =
-    "Extraia os dados da nota fiscal em anexo. Se um dado não existir, retorne null. Converta valores monetários para número real (padrão americano).";
+    "Extraia os dados da nota fiscal em anexo. Se um dado não existir, retorne null. Converta valores monetários para número real (padrão americano) e datas para o formato ISO YYYY-MM-DD.";
 
   const expectedResponseFormat = {
     type: "text",
@@ -250,5 +250,31 @@ describe("ai.service.ts - processReceiptWithAI", () => {
     await expect(
       processReceiptWithAI("receipts/123.jpg", "image/jpeg"),
     ).rejects.toThrow(SyntaxError);
+  });
+
+  it("should normalize issue_date from Brazilian format DD/MM/YYYY to ISO format YYYY-MM-DD", async () => {
+    const mockFileBuffer = new TextEncoder().encode("dummy-image-data").buffer;
+    mockStorage.download.mockResolvedValue({
+      data: { arrayBuffer: vi.fn().mockResolvedValue(mockFileBuffer) },
+      error: null,
+    });
+
+    const mockAiResponse = {
+      issuer_name: "Supermarket",
+      issuer_cnpj: "12.345.678/0001-90",
+      receiver_cnpj: "09.876.543/0001-12",
+      total_value: 150.5,
+      issue_date: "16/03/2026",
+      issue_number: "12345",
+      description: "Groceries",
+    };
+
+    mockInteractions.create.mockResolvedValue({
+      output_text: JSON.stringify(mockAiResponse),
+    });
+
+    const result = await processReceiptWithAI("receipts/123.jpg", "image/jpeg");
+
+    expect(result.issue_date).toBe("2026-03-16");
   });
 });

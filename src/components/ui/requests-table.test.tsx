@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { processReceiptAction } from "@/actions/ai.actions";
 import type { Database } from "@/models/database.types";
 import { RequestsTable } from "./requests-table";
@@ -11,6 +11,11 @@ vi.mock("@/actions/ai.actions", () => ({
 type RefundRequest = Database["public"]["Tables"]["refund_requests"]["Row"];
 
 describe("RequestsTable", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(processReceiptAction).mockResolvedValue({ success: true });
+  });
+
   it("should render table headers correctly", () => {
     render(<RequestsTable requests={[]} />);
     expect(screen.getByText("Nome")).toBeInTheDocument();
@@ -297,6 +302,24 @@ describe("RequestsTable", () => {
 
       expect(processReceiptAction).toHaveBeenCalledTimes(1);
       expect(processReceiptAction).toHaveBeenCalledWith("req-1");
+    });
+
+    it("should display an error alert when processReceiptAction returns { success: false, error }", async () => {
+      vi.mocked(processReceiptAction).mockResolvedValueOnce({
+        success: false,
+        error: "Falha ao processar nota fiscal",
+      });
+
+      render(<RequestsTable requests={mockDetailedRequests} />);
+
+      const approveButton = screen.getByRole("button", {
+        name: /aprovar para leitura/i,
+      });
+      fireEvent.click(approveButton);
+
+      const alert = await screen.findByRole("alert");
+      expect(alert).toBeInTheDocument();
+      expect(alert).toHaveTextContent("Falha ao processar nota fiscal");
     });
   });
 });
