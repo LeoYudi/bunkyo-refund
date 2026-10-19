@@ -1,7 +1,8 @@
 "use client";
 
-import { Eye } from "lucide-react";
+import { Eye, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { processReceiptAction } from "@/actions/ai.actions";
 import type { Database } from "@/models/database.types";
 import { ReceiptModal } from "./receipt-modal";
 
@@ -15,12 +16,26 @@ export interface RequestsTableProps {
 
 export function RequestsTable({
   requests,
-  onProcessRequest: _onProcessRequest,
+  onProcessRequest,
 }: RequestsTableProps) {
   const [selectedReceiptUrl, setSelectedReceiptUrl] = useState<string | null>(
     null,
   );
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+
+  const handleProcess = async (id: string) => {
+    setProcessingId(id);
+    try {
+      if (onProcessRequest) {
+        await onProcessRequest(id);
+      } else {
+        await processReceiptAction(id);
+      }
+    } finally {
+      setProcessingId(null);
+    }
+  };
 
   return (
     <div className="overflow-x-auto">
@@ -39,12 +54,24 @@ export function RequestsTable({
             <th scope="col" className="px-6 py-3">
               Anexo
             </th>
+            <th scope="col" className="px-6 py-3">
+              Emissor
+            </th>
+            <th scope="col" className="px-6 py-3">
+              CNPJ
+            </th>
+            <th scope="col" className="px-6 py-3">
+              Valor Total
+            </th>
+            <th scope="col" className="px-6 py-3">
+              Ações
+            </th>
           </tr>
         </thead>
         <tbody>
           {requests.length === 0 ? (
             <tr>
-              <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+              <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                 Nenhuma solicitação encontrada.
               </td>
             </tr>
@@ -73,6 +100,33 @@ export function RequestsTable({
                       aria-label="Ver anexo"
                     >
                       <Eye className="size-4" />
+                    </button>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </td>
+                <td className="px-6 py-4">{req.issuer_name || "-"}</td>
+                <td className="px-6 py-4">{req.issuer_cnpj || "-"}</td>
+                <td className="px-6 py-4">
+                  {req.total_value !== null && req.total_value !== undefined
+                    ? new Intl.NumberFormat("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      }).format(req.total_value)
+                    : "-"}
+                </td>
+                <td className="px-6 py-4">
+                  {req.status === "PENDING" ? (
+                    <button
+                      type="button"
+                      disabled={processingId === req.id}
+                      onClick={() => handleProcess(req.id)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50"
+                    >
+                      {processingId === req.id && (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      )}
+                      Aprovar para Leitura
                     </button>
                   ) : (
                     <span className="text-muted-foreground">-</span>

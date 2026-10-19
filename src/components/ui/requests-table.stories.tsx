@@ -8,6 +8,9 @@ const meta = {
   title: "UI/RequestsTable",
   component: RequestsTable,
   tags: ["autodocs"],
+  argTypes: {
+    onProcessRequest: { action: "onProcessRequest" },
+  },
 } satisfies Meta<typeof RequestsTable>;
 
 export default meta;

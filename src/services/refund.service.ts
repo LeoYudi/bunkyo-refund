@@ -6,6 +6,7 @@ import {
   RefundRepository,
   type RefundRequest,
 } from "@/repositories/refund.repository";
+import { processReceiptWithAI } from "@/services/ai.service";
 
 export class RefundService {
   private repository: RefundRepository;
@@ -38,7 +39,49 @@ export class RefundService {
     return this.repository.findAll();
   }
 
-  async approveAndProcessReceipt(_requestId: string): Promise<RefundRequest> {
-    throw new Error("Method not implemented.");
+  async approveAndProcessReceipt(requestId: string): Promise<RefundRequest> {
+    const request = await this.repository.findById(requestId);
+    if (!request || !request.receipt_file_url) {
+      throw new Error("Solicitação de reembolso não encontrada");
+    }
+
+    await this.repository.updateStatus(requestId, "PROCESSING");
+
+    try {
+      const url = request.receipt_file_url;
+      let storagePath = "";
+      if (url.includes("/receipts/")) {
+        const parts = url.split("/receipts/");
+        const afterReceipts = parts[1] || "";
+        storagePath = afterReceipts.split("?")[0] || "";
+      } else {
+        const urlWithoutQuery = url.split("?")[0] || "";
+        const segments = urlWithoutQuery.split("/");
+        storagePath = segments[segments.length - 1] || "";
+      }
+
+      const lowerPath = storagePath.toLowerCase();
+      let mimeType = "application/octet-stream";
+      if (lowerPath.endsWith(".pdf")) {
+        mimeType = "application/pdf";
+      } else if (lowerPath.endsWith(".png")) {
+        mimeType = "image/png";
+      } else if (lowerPath.endsWith(".webp")) {
+        mimeType = "image/webp";
+      } else if (lowerPath.endsWith(".gif")) {
+        mimeType = "image/gif";
+      } else if (lowerPath.endsWith(".jpg") || lowerPath.endsWith(".jpeg")) {
+        mimeType = "image/jpeg";
+      }
+
+      const extractedData = await processReceiptWithAI(storagePath, mimeType);
+      return await this.repository.update(requestId, {
+        ...extractedData,
+        status: "APPROVED",
+      });
+    } catch (error) {
+      await this.repository.updateStatus(requestId, "PENDING");
+      throw error;
+    }
   }
 }

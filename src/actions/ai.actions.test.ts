@@ -38,7 +38,8 @@ describe("processReceiptAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockApproveAndProcessReceipt = vi.fn();
-    vi.mocked(RefundService).mockImplementation(() => {
+    // biome-ignore lint/complexity/useArrowFunction: constructor mock requires function
+    vi.mocked(RefundService).mockImplementation(function () {
       return {
         approveAndProcessReceipt: mockApproveAndProcessReceipt,
       } as unknown as RefundService;
