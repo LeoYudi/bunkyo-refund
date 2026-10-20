@@ -1,9 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import type { Database } from "@/models/database.types";
+import type { RefundRequest } from "@/models/refund.model";
 import { RequestsTable } from "./requests-table";
 import { StatusLifecycle } from "./status-lifecycle";
-
-type RefundRequest = Database["public"]["Tables"]["refund_requests"]["Row"];
 
 const meta = {
   title: "UI/RequestsTable",

@@ -2,10 +2,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/models/database.types";
-import type { CreateRefundSchema } from "@/models/refund.model";
+import type {
+  CreateRefundSchema,
+  RefundRequest,
+  RefundStatus,
+} from "@/models/refund.model";
 
-export type RefundRequest =
-  Database["public"]["Tables"]["refund_requests"]["Row"];
+export type { RefundRequest };
 
 function extractErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -71,10 +74,7 @@ export class RefundRepository {
     return data;
   }
 
-  async updateStatus(
-    id: string,
-    status: Database["public"]["Enums"]["refund_status"],
-  ): Promise<RefundRequest> {
+  async updateStatus(id: string, status: RefundStatus): Promise<RefundRequest> {
     const supabase = await this.getClient();
     const { data, error } = await supabase
       .from("refund_requests")

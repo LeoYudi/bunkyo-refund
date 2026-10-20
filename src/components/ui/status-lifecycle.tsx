@@ -9,6 +9,23 @@ import {
   Send,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  REFUND_LIFECYCLE_STEPS,
+  REFUND_STATUS_MAP,
+  type RefundStatus,
+} from "@/models/refund.model";
+
+const statusIcons: Record<
+  RefundStatus,
+  React.ComponentType<{ className?: string }>
+> = {
+  PENDING: Clock,
+  PROCESSING: Cpu,
+  APPROVED: CheckCircle2,
+  DENIED: AlertCircle,
+  SENT: Send,
+  PAID: DollarSign,
+};
 
 export function StatusLifecycle() {
   return (
@@ -24,65 +41,29 @@ export function StatusLifecycle() {
 
       {/* Main Flow */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 relative">
-        {/* Step 1 */}
-        <div className="flex flex-col space-y-2 p-4 rounded-lg bg-muted/40 border relative">
-          <div className="flex items-center justify-between">
-            <Badge variant="pending">Pendente</Badge>
-            <Clock className="w-4 h-4 text-muted-foreground" />
-          </div>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Recebido do formulário público e aguardando triagem do
-            administrador.
-          </p>
-          <ArrowRight className="hidden md:block absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-4 h-4 text-muted-foreground" />
-        </div>
+        {REFUND_LIFECYCLE_STEPS.map((status, index) => {
+          const info = REFUND_STATUS_MAP[status];
+          const Icon = statusIcons[status] || Clock;
+          const isLast = index === REFUND_LIFECYCLE_STEPS.length - 1;
 
-        {/* Step 2 */}
-        <div className="flex flex-col space-y-2 p-4 rounded-lg bg-muted/40 border relative">
-          <div className="flex items-center justify-between">
-            <Badge variant="processing">Processando</Badge>
-            <Cpu className="w-4 h-4 text-amber-600" />
-          </div>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Nota fiscal em leitura e extração de dados pela IA (Gemini).
-          </p>
-          <ArrowRight className="hidden md:block absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-4 h-4 text-muted-foreground" />
-        </div>
-
-        {/* Step 3 */}
-        <div className="flex flex-col space-y-2 p-4 rounded-lg bg-muted/40 border relative">
-          <div className="flex items-center justify-between">
-            <Badge variant="approved">Aprovado</Badge>
-            <CheckCircle2 className="w-4 h-4 text-blue-600" />
-          </div>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Dados extraídos e validados, pronto para envio em lote.
-          </p>
-          <ArrowRight className="hidden md:block absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-4 h-4 text-muted-foreground" />
-        </div>
-
-        {/* Step 4 */}
-        <div className="flex flex-col space-y-2 p-4 rounded-lg bg-muted/40 border relative">
-          <div className="flex items-center justify-between">
-            <Badge variant="sent">Enviado</Badge>
-            <Send className="w-4 h-4 text-purple-600" />
-          </div>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Lote consolidado e encaminhado por e-mail ao financeiro.
-          </p>
-          <ArrowRight className="hidden md:block absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-4 h-4 text-muted-foreground" />
-        </div>
-
-        {/* Step 5 */}
-        <div className="flex flex-col space-y-2 p-4 rounded-lg bg-muted/40 border relative">
-          <div className="flex items-center justify-between">
-            <Badge variant="paid">Pago</Badge>
-            <DollarSign className="w-4 h-4 text-emerald-600" />
-          </div>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Reembolso efetuado e concluído pelo financeiro.
-          </p>
-        </div>
+          return (
+            <div
+              key={status}
+              className="flex flex-col space-y-2 p-4 rounded-lg bg-muted/40 border relative"
+            >
+              <div className="flex items-center justify-between">
+                <Badge variant={info.badgeVariant}>{info.label}</Badge>
+                <Icon className="w-4 h-4 text-muted-foreground" />
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {info.description}
+              </p>
+              {!isLast && (
+                <ArrowRight className="hidden md:block absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-4 h-4 text-muted-foreground" />
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Denied / Exception branch */}
@@ -97,11 +78,13 @@ export function StatusLifecycle() {
               <CornerDownRight className="w-3.5 h-3.5 text-muted-foreground" />
             </div>
             <p className="text-xs text-muted-foreground">
-              Pedido recusado ou invalidado na triagem.
+              {REFUND_STATUS_MAP.DENIED.description}
             </p>
           </div>
         </div>
-        <Badge variant="denied">Negado</Badge>
+        <Badge variant={REFUND_STATUS_MAP.DENIED.badgeVariant}>
+          {REFUND_STATUS_MAP.DENIED.label}
+        </Badge>
       </div>
     </div>
   );

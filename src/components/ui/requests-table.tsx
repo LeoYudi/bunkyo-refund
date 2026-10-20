@@ -3,39 +3,16 @@
 import { Eye, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { processReceiptAction } from "@/actions/ai.actions";
-import type { Database } from "@/models/database.types";
+import { REFUND_STATUS_MAP, type RefundRequest } from "@/models/refund.model";
 import { Badge } from "./badge";
 import { ReceiptModal } from "./receipt-modal";
 
-export type RefundRequest =
-  Database["public"]["Tables"]["refund_requests"]["Row"];
+export type { RefundRequest };
 
 export interface RequestsTableProps {
   requests: RefundRequest[];
   onProcessRequest?: (requestId: string) => Promise<void> | void;
 }
-
-const statusConfig: Record<
-  RefundRequest["status"],
-  {
-    label: string;
-    variant:
-      | "pending"
-      | "processing"
-      | "approved"
-      | "denied"
-      | "sent"
-      | "paid"
-      | "default";
-  }
-> = {
-  PENDING: { label: "Pendente", variant: "pending" },
-  PROCESSING: { label: "Processando", variant: "processing" },
-  APPROVED: { label: "Aprovado", variant: "approved" },
-  DENIED: { label: "Negado", variant: "denied" },
-  SENT: { label: "Enviado", variant: "sent" },
-  PAID: { label: "Pago", variant: "paid" },
-};
 
 export function RequestsTable({
   requests,
@@ -116,10 +93,7 @@ export function RequestsTable({
             </tr>
           ) : (
             requests.map((req) => {
-              const currentStatus = statusConfig[req.status] || {
-                label: req.status,
-                variant: "default",
-              };
+              const currentStatus = REFUND_STATUS_MAP[req.status];
               return (
                 <tr
                   key={req.id}
@@ -129,8 +103,8 @@ export function RequestsTable({
                     {req.requester_name}
                   </td>
                   <td className="px-6 py-4">
-                    <Badge variant={currentStatus.variant}>
-                      {currentStatus.label}
+                    <Badge variant={currentStatus?.badgeVariant ?? "default"}>
+                      {currentStatus?.label ?? req.status}
                     </Badge>
                   </td>
                   <td className="px-6 py-4">

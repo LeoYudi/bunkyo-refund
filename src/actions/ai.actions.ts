@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { RefundRequest } from "@/repositories/refund.repository";
+import type { RefundRequest } from "@/models/refund.model";
 import { RefundService } from "@/services/refund.service";
 
 export async function processReceiptAction(

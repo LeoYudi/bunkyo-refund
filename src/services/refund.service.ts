@@ -1,11 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { z } from "zod";
 import type { Database } from "@/models/database.types";
-import type { CreateRefundSchema } from "@/models/refund.model";
-import {
-  RefundRepository,
-  type RefundRequest,
-} from "@/repositories/refund.repository";
+import type { CreateRefundSchema, RefundRequest } from "@/models/refund.model";
+import { RefundRepository } from "@/repositories/refund.repository";
 import { processReceiptWithAI } from "@/services/ai.service";
 
 export class RefundService {

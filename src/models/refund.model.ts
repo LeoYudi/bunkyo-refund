@@ -1,4 +1,8 @@
 import { z } from "zod";
+import type { Database } from "@/models/database.types";
+
+export type RefundRequest =
+  Database["public"]["Tables"]["refund_requests"]["Row"];
 
 export const RefundStatusSchema = z.enum([
   "PENDING",
@@ -67,20 +71,58 @@ export const ReceiptAIExtractionSchema = z.object({
 
 export type RefundStatus = z.infer<typeof RefundStatusSchema>;
 
+export type RefundStatusBadgeVariant =
+  | "pending"
+  | "processing"
+  | "approved"
+  | "denied"
+  | "sent"
+  | "paid";
+
 export interface RefundStatusMetadata {
   label: string;
   description: string;
-  badgeVariant:
-    | "pending"
-    | "processing"
-    | "approved"
-    | "denied"
-    | "sent"
-    | "paid";
+  badgeVariant: RefundStatusBadgeVariant;
 }
 
-export const REFUND_STATUS_MAP: Partial<
-  Record<RefundStatus, RefundStatusMetadata>
-> = {};
+export const REFUND_STATUS_MAP: Record<RefundStatus, RefundStatusMetadata> = {
+  PENDING: {
+    label: "Pendente",
+    description:
+      "Recebido do formulário público e aguardando triagem do administrador.",
+    badgeVariant: "pending",
+  },
+  PROCESSING: {
+    label: "Processando",
+    description: "Nota fiscal em leitura e extração de dados pela IA (Gemini).",
+    badgeVariant: "processing",
+  },
+  APPROVED: {
+    label: "Aprovado",
+    description: "Dados extraídos e validados, pronto para envio em lote.",
+    badgeVariant: "approved",
+  },
+  DENIED: {
+    label: "Negado",
+    description: "Pedido recusado ou invalidado na triagem.",
+    badgeVariant: "denied",
+  },
+  SENT: {
+    label: "Enviado",
+    description: "Lote consolidado e encaminhado por e-mail ao financeiro.",
+    badgeVariant: "sent",
+  },
+  PAID: {
+    label: "Pago",
+    description: "Reembolso efetuado e concluído pelo financeiro.",
+    badgeVariant: "paid",
+  },
+};
 
-export const REFUND_LIFECYCLE_STEPS: readonly RefundStatus[] = [];
+export const REFUND_LIFECYCLE_STEPS: readonly RefundStatus[] = [
+  "PENDING",
+  "PROCESSING",
+  "APPROVED",
+  "SENT",
+  "PAID",
+];
