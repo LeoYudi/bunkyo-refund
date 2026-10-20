@@ -7,7 +7,6 @@ import {
   Cpu,
   DollarSign,
   Send,
-  XCircle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -35,6 +34,7 @@ export function StatusLifecycle() {
             Recebido do formulário público e aguardando triagem do
             administrador.
           </p>
+          <ArrowRight className="hidden md:block absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-4 h-4 text-muted-foreground" />
         </div>
 
         {/* Step 2 */}
@@ -46,6 +46,7 @@ export function StatusLifecycle() {
           <p className="text-xs text-muted-foreground leading-relaxed">
             Nota fiscal em leitura e extração de dados pela IA (Gemini).
           </p>
+          <ArrowRight className="hidden md:block absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-4 h-4 text-muted-foreground" />
         </div>
 
         {/* Step 3 */}
@@ -57,6 +58,7 @@ export function StatusLifecycle() {
           <p className="text-xs text-muted-foreground leading-relaxed">
             Dados extraídos e validados, pronto para envio em lote.
           </p>
+          <ArrowRight className="hidden md:block absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-4 h-4 text-muted-foreground" />
         </div>
 
         {/* Step 4 */}
@@ -68,6 +70,7 @@ export function StatusLifecycle() {
           <p className="text-xs text-muted-foreground leading-relaxed">
             Lote consolidado e encaminhado por e-mail ao financeiro.
           </p>
+          <ArrowRight className="hidden md:block absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-4 h-4 text-muted-foreground" />
         </div>
 
         {/* Step 5 */}
@@ -80,14 +83,6 @@ export function StatusLifecycle() {
             Reembolso efetuado e concluído pelo financeiro.
           </p>
         </div>
-      </div>
-
-      {/* Connectors / Flow arrows for tests */}
-      <div className="hidden">
-        <ArrowRight />
-        <ArrowRight />
-        <ArrowRight />
-        <ArrowRight />
       </div>
 
       {/* Denied / Exception branch */}
