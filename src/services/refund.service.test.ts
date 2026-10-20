@@ -491,4 +491,140 @@ describe("RefundService", () => {
       );
     });
   });
+
+  describe("approveAndProcessBatchReceipts", () => {
+    const mockPendingReq1: RefundRequest = {
+      id: "req-1",
+      requester_name: "Alice",
+      receipt_file_url:
+        "https://example.supabase.co/storage/v1/object/public/receipts/doc1.pdf",
+      status: "PENDING",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      reviewed_by: null,
+      issuer_name: null,
+      issuer_cnpj: null,
+      receiver_cnpj: null,
+      total_value: null,
+      issue_date: null,
+      issue_number: null,
+      description: null,
+    };
+
+    const mockPendingReq2: RefundRequest = {
+      id: "req-2",
+      requester_name: "Bob",
+      receipt_file_url:
+        "https://example.supabase.co/storage/v1/object/public/receipts/doc2.pdf",
+      status: "PENDING",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      reviewed_by: null,
+      issuer_name: null,
+      issuer_cnpj: null,
+      receiver_cnpj: null,
+      total_value: null,
+      issue_date: null,
+      issue_number: null,
+      description: null,
+    };
+
+    const mockExtractedData = {
+      issuer_name: "Restaurante Bunkyo",
+      issuer_cnpj: "12345678000199",
+      receiver_cnpj: "98765432000199",
+      total_value: 150.5,
+      issue_date: "2026-09-25",
+      issue_number: "NF-1234",
+      description: "Almoço com equipe",
+    };
+
+    const mockApprovedReq1: RefundRequest = {
+      ...mockPendingReq1,
+      ...mockExtractedData,
+      status: "APPROVED",
+    };
+
+    const mockApprovedReq2: RefundRequest = {
+      ...mockPendingReq2,
+      ...mockExtractedData,
+      status: "APPROVED",
+    };
+
+    it("should process multiple requests in batch successfully and return succeeded array with empty failed array", async () => {
+      const service = new RefundService();
+
+      mockRepositoryInstance.findById.mockImplementation(async (id: string) => {
+        if (id === "req-1") return mockPendingReq1;
+        if (id === "req-2") return mockPendingReq2;
+        return null;
+      });
+      mockRepositoryInstance.updateStatus.mockImplementation(
+        async (id: string, status: RefundRequest["status"]) => {
+          const base = id === "req-1" ? mockPendingReq1 : mockPendingReq2;
+          return { ...base, status };
+        },
+      );
+      vi.mocked(processReceiptWithAI).mockResolvedValue(mockExtractedData);
+      mockRepositoryInstance.update.mockImplementation(async (id: string) => {
+        return id === "req-1" ? mockApprovedReq1 : mockApprovedReq2;
+      });
+
+      const result = await service.approveAndProcessBatchReceipts([
+        "req-1",
+        "req-2",
+      ]);
+
+      expect(result).toEqual({
+        succeeded: [mockApprovedReq1, mockApprovedReq2],
+        failed: [],
+      });
+    });
+
+    it("should use Promise.allSettled to continue processing when one request fails, reverting only the failed one to PENDING", async () => {
+      const service = new RefundService();
+
+      mockRepositoryInstance.findById.mockImplementation(async (id: string) => {
+        if (id === "req-1") return mockPendingReq1;
+        if (id === "req-2") return mockPendingReq2;
+        return null;
+      });
+      mockRepositoryInstance.updateStatus.mockImplementation(
+        async (id: string, status: RefundRequest["status"]) => {
+          const base = id === "req-1" ? mockPendingReq1 : mockPendingReq2;
+          return { ...base, status };
+        },
+      );
+      vi.mocked(processReceiptWithAI).mockImplementation(
+        async (storagePath: string) => {
+          if (storagePath === "doc2.pdf") {
+            throw new Error("Falha na leitura de IA do recibo 2");
+          }
+          return mockExtractedData;
+        },
+      );
+      mockRepositoryInstance.update.mockImplementation(async (id: string) => {
+        return id === "req-1" ? mockApprovedReq1 : mockApprovedReq2;
+      });
+
+      const result = await service.approveAndProcessBatchReceipts([
+        "req-1",
+        "req-2",
+      ]);
+
+      expect(mockRepositoryInstance.updateStatus).toHaveBeenCalledWith(
+        "req-2",
+        "PENDING",
+      );
+      expect(result).toEqual({
+        succeeded: [mockApprovedReq1],
+        failed: [
+          {
+            id: "req-2",
+            error: "Falha na leitura de IA do recibo 2",
+          },
+        ],
+      });
+    });
+  });
 });

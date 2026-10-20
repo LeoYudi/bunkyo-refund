@@ -81,4 +81,12 @@ export class RefundService {
       throw error;
     }
   }
+
+  async approveAndProcessBatchReceipts(requestIds: string[]): Promise<{
+    succeeded: RefundRequest[];
+    failed: Array<{ id: string; error: string }>;
+  }> {
+    void requestIds;
+    throw new Error("Not implemented");
+  }
 }

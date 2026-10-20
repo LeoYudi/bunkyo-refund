@@ -17,3 +17,17 @@ export async function processReceiptAction(
     return { success: false, error: errorMessage };
   }
 }
+
+export async function processBatchReceiptsAction(
+  requestIds: string[],
+): Promise<{
+  success: boolean;
+  data?: {
+    succeeded: RefundRequest[];
+    failed: Array<{ id: string; error: string }>;
+  };
+  error?: string;
+}> {
+  void requestIds;
+  throw new Error("Not implemented");
+}

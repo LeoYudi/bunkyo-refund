@@ -1,11 +1,15 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { processReceiptAction } from "@/actions/ai.actions";
+import {
+  processBatchReceiptsAction,
+  processReceiptAction,
+} from "@/actions/ai.actions";
 import type { Database } from "@/models/database.types";
 import { RequestsTable } from "./requests-table";
 
 vi.mock("@/actions/ai.actions", () => ({
   processReceiptAction: vi.fn(),
+  processBatchReceiptsAction: vi.fn(),
 }));
 
 type RefundRequest = Database["public"]["Tables"]["refund_requests"]["Row"];
@@ -14,6 +18,10 @@ describe("RequestsTable", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(processReceiptAction).mockResolvedValue({ success: true });
+    vi.mocked(processBatchReceiptsAction).mockResolvedValue({
+      success: true,
+      data: { succeeded: [], failed: [] },
+    });
   });
 
   it("should render table headers correctly", () => {
@@ -266,7 +274,7 @@ describe("RequestsTable", () => {
       render(<RequestsTable requests={mockDetailedRequests} />);
 
       const approveButtons = screen.getAllByRole("button", {
-        name: /aprovar para leitura/i,
+        name: /^aprovar para leitura$/i,
       });
 
       // Only req-1 has status PENDING, while others are APPROVED, PROCESSING, DENIED, SENT, PAID
@@ -284,7 +292,7 @@ describe("RequestsTable", () => {
       );
 
       const approveButton = screen.getByRole("button", {
-        name: /aprovar para leitura/i,
+        name: /^aprovar para leitura$/i,
       });
       fireEvent.click(approveButton);
 
@@ -296,7 +304,7 @@ describe("RequestsTable", () => {
       render(<RequestsTable requests={mockDetailedRequests} />);
 
       const approveButton = screen.getByRole("button", {
-        name: /aprovar para leitura/i,
+        name: /^aprovar para leitura$/i,
       });
       fireEvent.click(approveButton);
 
@@ -313,7 +321,7 @@ describe("RequestsTable", () => {
       render(<RequestsTable requests={mockDetailedRequests} />);
 
       const approveButton = screen.getByRole("button", {
-        name: /aprovar para leitura/i,
+        name: /^aprovar para leitura$/i,
       });
       fireEvent.click(approveButton);
 
@@ -554,11 +562,11 @@ describe("RequestsTable", () => {
       },
     ];
 
-    it("should render row checkboxes and a 'Selecionar todas as solicitações aprovadas' header checkbox", () => {
+    it("should render row checkboxes and a header select-all checkbox", () => {
       render(<RequestsTable requests={bulkMockRequests} />);
 
       const selectAllCheckbox = screen.getByRole("checkbox", {
-        name: /selecionar todas as solicitações aprovadas/i,
+        name: /selecionar todas as solicitações/i,
       });
       expect(selectAllCheckbox).toBeInTheDocument();
 
@@ -567,7 +575,7 @@ describe("RequestsTable", () => {
       expect(allCheckboxes).toHaveLength(8);
     });
 
-    it("should enable checkboxes only for APPROVED rows and disable them for PENDING, PROCESSING, DENIED, SENT, and PAID rows", () => {
+    it("should enable checkboxes for PENDING and APPROVED rows and disable them for PROCESSING, DENIED, SENT, and PAID rows", () => {
       render(<RequestsTable requests={bulkMockRequests} />);
 
       const allCheckboxes = screen.getAllByRole("checkbox");
@@ -583,7 +591,7 @@ describe("RequestsTable", () => {
         paidCb,
       ] = allCheckboxes;
 
-      expect(pendingCb).toBeDisabled();
+      expect(pendingCb).not.toBeDisabled();
       expect(approved1Cb).not.toBeDisabled();
       expect(approved2Cb).not.toBeDisabled();
       expect(processingCb).toBeDisabled();
@@ -592,19 +600,46 @@ describe("RequestsTable", () => {
       expect(paidCb).toBeDisabled();
     });
 
-    it("should display the top action bar with '0 selecionado(s)' and disabled 'Enviar Pagamentos em Lote' button initially", () => {
+    it("should display the top action bar with '0 selecionado(s)' and both 'Aprovar para Leitura em Lote' and 'Enviar Pagamentos em Lote' buttons disabled initially", () => {
       render(<RequestsTable requests={bulkMockRequests} />);
 
       expect(screen.getByText(/0 selecionado\(s\)/i)).toBeInTheDocument();
 
-      const batchButton = screen.getByRole("button", {
+      const batchApproveButton = screen.getByRole("button", {
+        name: /aprovar para leitura em lote/i,
+      });
+      expect(batchApproveButton).toBeInTheDocument();
+      expect(batchApproveButton).toBeDisabled();
+
+      const batchPaymentButton = screen.getByRole("button", {
         name: /enviar pagamentos em lote/i,
       });
-      expect(batchButton).toBeInTheDocument();
-      expect(batchButton).toBeDisabled();
+      expect(batchPaymentButton).toBeInTheDocument();
+      expect(batchPaymentButton).toBeDisabled();
     });
 
-    it("should update selected count and enable 'Enviar Pagamentos em Lote' button when an APPROVED row checkbox is checked", () => {
+    it("should enable 'Aprovar para Leitura em Lote' and keep 'Enviar Pagamentos em Lote' disabled when only a PENDING row is selected", () => {
+      render(<RequestsTable requests={bulkMockRequests} />);
+
+      const allCheckboxes = screen.getAllByRole("checkbox");
+      const pendingCb = allCheckboxes[1];
+
+      fireEvent.click(pendingCb);
+
+      expect(screen.getByText(/1 selecionado\(s\)/i)).toBeInTheDocument();
+
+      const batchApproveButton = screen.getByRole("button", {
+        name: /aprovar para leitura em lote/i,
+      });
+      const batchPaymentButton = screen.getByRole("button", {
+        name: /enviar pagamentos em lote/i,
+      });
+
+      expect(batchApproveButton).not.toBeDisabled();
+      expect(batchPaymentButton).toBeDisabled();
+    });
+
+    it("should enable 'Enviar Pagamentos em Lote' and keep 'Aprovar para Leitura em Lote' disabled when only an APPROVED row is selected", () => {
       render(<RequestsTable requests={bulkMockRequests} />);
 
       const allCheckboxes = screen.getAllByRole("checkbox");
@@ -614,47 +649,56 @@ describe("RequestsTable", () => {
 
       expect(screen.getByText(/1 selecionado\(s\)/i)).toBeInTheDocument();
 
-      const batchButton = screen.getByRole("button", {
+      const batchApproveButton = screen.getByRole("button", {
+        name: /aprovar para leitura em lote/i,
+      });
+      const batchPaymentButton = screen.getByRole("button", {
         name: /enviar pagamentos em lote/i,
       });
-      expect(batchButton).not.toBeDisabled();
+
+      expect(batchPaymentButton).not.toBeDisabled();
+      expect(batchApproveButton).toBeDisabled();
     });
 
-    it("should select all APPROVED requests when header checkbox is checked and clear selection when unchecked", () => {
+    it("should call processBatchReceiptsAction with only selected PENDING request IDs when both PENDING and APPROVED rows are selected and 'Aprovar para Leitura em Lote' is clicked", () => {
       render(<RequestsTable requests={bulkMockRequests} />);
 
-      const selectAllCheckbox = screen.getByRole("checkbox", {
-        name: /selecionar todas as solicitações aprovadas/i,
-      });
+      const allCheckboxes = screen.getAllByRole("checkbox");
+      const pendingCb = allCheckboxes[1];
+      const approved1Cb = allCheckboxes[2];
 
-      fireEvent.click(selectAllCheckbox);
+      fireEvent.click(pendingCb);
+      fireEvent.click(approved1Cb);
 
       expect(screen.getByText(/2 selecionado\(s\)/i)).toBeInTheDocument();
 
-      const allCheckboxes = screen.getAllByRole("checkbox");
-      expect(allCheckboxes[2]).toBeChecked();
-      expect(allCheckboxes[3]).toBeChecked();
-      expect(allCheckboxes[1]).not.toBeChecked();
+      const batchApproveButton = screen.getByRole("button", {
+        name: /aprovar para leitura em lote/i,
+      });
+      fireEvent.click(batchApproveButton);
 
-      fireEvent.click(selectAllCheckbox);
-
-      expect(screen.getByText(/0 selecionado\(s\)/i)).toBeInTheDocument();
-      expect(allCheckboxes[2]).not.toBeChecked();
-      expect(allCheckboxes[3]).not.toBeChecked();
+      expect(processBatchReceiptsAction).toHaveBeenCalledTimes(1);
+      expect(processBatchReceiptsAction).toHaveBeenCalledWith(["req-pending"]);
     });
 
-    it("should open BatchPaymentDialog showing selected items and consolidated total value when 'Enviar Pagamentos em Lote' is clicked", () => {
+    it("should open BatchPaymentDialog containing only selected APPROVED requests when both PENDING and APPROVED rows are selected and 'Enviar Pagamentos em Lote' is clicked", () => {
       render(<RequestsTable requests={bulkMockRequests} />);
 
-      const selectAllCheckbox = screen.getByRole("checkbox", {
-        name: /selecionar todas as solicitações aprovadas/i,
-      });
-      fireEvent.click(selectAllCheckbox);
+      const allCheckboxes = screen.getAllByRole("checkbox");
+      const pendingCb = allCheckboxes[1];
+      const approved1Cb = allCheckboxes[2];
+      const approved2Cb = allCheckboxes[3];
 
-      const batchButton = screen.getByRole("button", {
+      fireEvent.click(pendingCb);
+      fireEvent.click(approved1Cb);
+      fireEvent.click(approved2Cb);
+
+      expect(screen.getByText(/3 selecionado\(s\)/i)).toBeInTheDocument();
+
+      const batchPaymentButton = screen.getByRole("button", {
         name: /enviar pagamentos em lote/i,
       });
-      fireEvent.click(batchButton);
+      fireEvent.click(batchPaymentButton);
 
       const dialog = screen.getByRole("dialog");
       expect(dialog).toBeInTheDocument();
