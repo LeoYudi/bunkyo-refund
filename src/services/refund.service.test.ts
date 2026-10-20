@@ -5,11 +5,18 @@ import {
   RefundRepository,
   type RefundRequest,
 } from "@/repositories/refund.repository";
+import { processReceiptWithAI } from "@/services/ai.service";
 import { RefundService } from "./refund.service";
 
 vi.mock("@/repositories/refund.repository", () => {
   return {
     RefundRepository: vi.fn(),
+  };
+});
+
+vi.mock("@/services/ai.service", () => {
+  return {
+    processReceiptWithAI: vi.fn(),
   };
 });
 
@@ -19,6 +26,7 @@ describe("RefundService", () => {
     findAll: ReturnType<typeof vi.fn>;
     findById: ReturnType<typeof vi.fn>;
     updateStatus: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
@@ -29,6 +37,7 @@ describe("RefundService", () => {
       findAll: vi.fn(),
       findById: vi.fn(),
       updateStatus: vi.fn(),
+      update: vi.fn(),
     };
 
     // biome-ignore lint/complexity/useArrowFunction: constructor mock requires function
@@ -73,19 +82,16 @@ describe("RefundService", () => {
       const payload: z.infer<typeof CreateRefundSchema> = {
         requester_name: "Leonardo Higuti",
         receipt_file_url: "https://example.com/receipt.pdf",
-        issuer_name: "Restaurante Bunkyo",
-        issuer_cnpj: "12345678000199",
-        total_value: 150.5,
       };
 
       const mockCreatedRefund: RefundRequest = {
         id: "123e4567-e89b-12d3-a456-426614174000",
         requester_name: payload.requester_name,
         receipt_file_url: payload.receipt_file_url,
-        issuer_name: payload.issuer_name ?? null,
-        issuer_cnpj: payload.issuer_cnpj ?? null,
+        issuer_name: null,
+        issuer_cnpj: null,
         receiver_cnpj: null,
-        total_value: payload.total_value ?? null,
+        total_value: null,
         issue_date: null,
         issue_number: null,
         description: null,
@@ -188,6 +194,301 @@ describe("RefundService", () => {
         "Database connection timeout",
       );
       expect(mockRepositoryInstance.findAll).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("approveAndProcessReceipt", () => {
+    const mockPendingRequest: RefundRequest = {
+      id: "req-123",
+      requester_name: "Leonardo Higuti",
+      receipt_file_url:
+        "https://example.supabase.co/storage/v1/object/public/receipts/20260925-doc.pdf",
+      status: "PENDING",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      reviewed_by: null,
+      issuer_name: null,
+      issuer_cnpj: null,
+      receiver_cnpj: null,
+      total_value: null,
+      issue_date: null,
+      issue_number: null,
+      description: null,
+    };
+
+    const mockExtractedData = {
+      issuer_name: "Restaurante Bunkyo",
+      issuer_cnpj: "12345678000199",
+      receiver_cnpj: "98765432000199",
+      total_value: 150.5,
+      issue_date: "2026-09-25",
+      issue_number: "NF-1234",
+      description: "Almoço com equipe",
+    };
+
+    it("should successfully approve and process a PDF receipt", async () => {
+      const service = new RefundService();
+
+      const mockProcessingRequest: RefundRequest = {
+        ...mockPendingRequest,
+        status: "PROCESSING",
+      };
+
+      const mockApprovedRequest: RefundRequest = {
+        ...mockPendingRequest,
+        ...mockExtractedData,
+        status: "APPROVED",
+      };
+
+      mockRepositoryInstance.findById.mockResolvedValue(mockPendingRequest);
+      mockRepositoryInstance.updateStatus.mockResolvedValue(
+        mockProcessingRequest,
+      );
+      vi.mocked(processReceiptWithAI).mockResolvedValue(mockExtractedData);
+      mockRepositoryInstance.update.mockResolvedValue(mockApprovedRequest);
+
+      const result = await service.approveAndProcessReceipt("req-123");
+
+      expect(mockRepositoryInstance.findById).toHaveBeenCalledWith("req-123");
+      expect(mockRepositoryInstance.updateStatus).toHaveBeenCalledWith(
+        "req-123",
+        "PROCESSING",
+      );
+      expect(processReceiptWithAI).toHaveBeenCalledWith(
+        "20260925-doc.pdf",
+        "application/pdf",
+      );
+      expect(mockRepositoryInstance.update).toHaveBeenCalledWith("req-123", {
+        ...mockExtractedData,
+        status: "APPROVED",
+      });
+      expect(result).toEqual(mockApprovedRequest);
+    });
+
+    it("should extract storagePath and mimeType correctly for PNG image receipt", async () => {
+      const service = new RefundService();
+
+      const pngRequest: RefundRequest = {
+        ...mockPendingRequest,
+        receipt_file_url:
+          "https://example.supabase.co/storage/v1/object/public/receipts/recibo-foto.png",
+      };
+
+      mockRepositoryInstance.findById.mockResolvedValue(pngRequest);
+      mockRepositoryInstance.updateStatus.mockResolvedValue({
+        ...pngRequest,
+        status: "PROCESSING",
+      });
+      vi.mocked(processReceiptWithAI).mockResolvedValue(mockExtractedData);
+      mockRepositoryInstance.update.mockResolvedValue({
+        ...pngRequest,
+        ...mockExtractedData,
+        status: "APPROVED",
+      });
+
+      await service.approveAndProcessReceipt("req-123");
+
+      expect(processReceiptWithAI).toHaveBeenCalledWith(
+        "recibo-foto.png",
+        "image/png",
+      );
+    });
+
+    it("should extract storagePath and mimeType correctly for JPEG image receipt", async () => {
+      const service = new RefundService();
+
+      const jpegRequest: RefundRequest = {
+        ...mockPendingRequest,
+        receipt_file_url:
+          "https://example.supabase.co/storage/v1/object/public/receipts/recibo.jpeg",
+      };
+
+      mockRepositoryInstance.findById.mockResolvedValue(jpegRequest);
+      mockRepositoryInstance.updateStatus.mockResolvedValue({
+        ...jpegRequest,
+        status: "PROCESSING",
+      });
+      vi.mocked(processReceiptWithAI).mockResolvedValue(mockExtractedData);
+      mockRepositoryInstance.update.mockResolvedValue({
+        ...jpegRequest,
+        ...mockExtractedData,
+        status: "APPROVED",
+      });
+
+      await service.approveAndProcessReceipt("req-123");
+
+      expect(processReceiptWithAI).toHaveBeenCalledWith(
+        "recibo.jpeg",
+        "image/jpeg",
+      );
+    });
+
+    it("should extract storagePath and mimeType correctly for JPG image receipt", async () => {
+      const service = new RefundService();
+
+      const jpgRequest: RefundRequest = {
+        ...mockPendingRequest,
+        receipt_file_url:
+          "https://example.supabase.co/storage/v1/object/public/receipts/recibo-foto.jpg",
+      };
+
+      mockRepositoryInstance.findById.mockResolvedValue(jpgRequest);
+      mockRepositoryInstance.updateStatus.mockResolvedValue({
+        ...jpgRequest,
+        status: "PROCESSING",
+      });
+      vi.mocked(processReceiptWithAI).mockResolvedValue(mockExtractedData);
+      mockRepositoryInstance.update.mockResolvedValue({
+        ...jpgRequest,
+        ...mockExtractedData,
+        status: "APPROVED",
+      });
+
+      await service.approveAndProcessReceipt("req-123");
+
+      expect(processReceiptWithAI).toHaveBeenCalledWith(
+        "recibo-foto.jpg",
+        "image/jpeg",
+      );
+    });
+
+    it("should handle uppercase file extensions correctly (e.g. .PDF, .JPG)", async () => {
+      const service = new RefundService();
+
+      const uppercasePdfRequest: RefundRequest = {
+        ...mockPendingRequest,
+        receipt_file_url:
+          "https://example.supabase.co/storage/v1/object/public/receipts/DOCUMENTO.PDF",
+      };
+
+      mockRepositoryInstance.findById.mockResolvedValue(uppercasePdfRequest);
+      mockRepositoryInstance.updateStatus.mockResolvedValue({
+        ...uppercasePdfRequest,
+        status: "PROCESSING",
+      });
+      vi.mocked(processReceiptWithAI).mockResolvedValue(mockExtractedData);
+      mockRepositoryInstance.update.mockResolvedValue({
+        ...uppercasePdfRequest,
+        ...mockExtractedData,
+        status: "APPROVED",
+      });
+
+      await service.approveAndProcessReceipt("req-123");
+
+      expect(processReceiptWithAI).toHaveBeenCalledWith(
+        "DOCUMENTO.PDF",
+        "application/pdf",
+      );
+    });
+
+    it("should handle null fields in extracted AI data and update request with status APPROVED", async () => {
+      const service = new RefundService();
+
+      const partialExtractedData = {
+        issuer_name: "Restaurante Bunkyo",
+        issuer_cnpj: null,
+        receiver_cnpj: null,
+        total_value: null,
+        issue_date: null,
+        issue_number: null,
+        description: null,
+      };
+
+      const mockApprovedWithNulls: RefundRequest = {
+        ...mockPendingRequest,
+        ...partialExtractedData,
+        status: "APPROVED",
+      };
+
+      mockRepositoryInstance.findById.mockResolvedValue(mockPendingRequest);
+      mockRepositoryInstance.updateStatus.mockResolvedValue({
+        ...mockPendingRequest,
+        status: "PROCESSING",
+      });
+      vi.mocked(processReceiptWithAI).mockResolvedValue(partialExtractedData);
+      mockRepositoryInstance.update.mockResolvedValue(mockApprovedWithNulls);
+
+      const result = await service.approveAndProcessReceipt("req-123");
+
+      expect(mockRepositoryInstance.update).toHaveBeenCalledWith("req-123", {
+        ...partialExtractedData,
+        status: "APPROVED",
+      });
+      expect(result).toEqual(mockApprovedWithNulls);
+    });
+
+    it("should throw an error when refund request is not found", async () => {
+      const service = new RefundService();
+      mockRepositoryInstance.findById.mockResolvedValue(null);
+
+      await expect(
+        service.approveAndProcessReceipt("non-existent-id"),
+      ).rejects.toThrow("Solicitação de reembolso não encontrada");
+
+      expect(mockRepositoryInstance.findById).toHaveBeenCalledWith(
+        "non-existent-id",
+      );
+      expect(mockRepositoryInstance.updateStatus).not.toHaveBeenCalled();
+      expect(processReceiptWithAI).not.toHaveBeenCalled();
+      expect(mockRepositoryInstance.update).not.toHaveBeenCalled();
+    });
+
+    it("should revert status to PENDING and rethrow error when processReceiptWithAI fails", async () => {
+      const service = new RefundService();
+
+      mockRepositoryInstance.findById.mockResolvedValue(mockPendingRequest);
+      mockRepositoryInstance.updateStatus.mockResolvedValue({
+        ...mockPendingRequest,
+        status: "PROCESSING",
+      });
+      vi.mocked(processReceiptWithAI).mockRejectedValue(
+        new Error("AI extraction service unavailable"),
+      );
+
+      await expect(service.approveAndProcessReceipt("req-123")).rejects.toThrow(
+        "AI extraction service unavailable",
+      );
+
+      expect(mockRepositoryInstance.updateStatus).toHaveBeenNthCalledWith(
+        1,
+        "req-123",
+        "PROCESSING",
+      );
+      expect(mockRepositoryInstance.updateStatus).toHaveBeenNthCalledWith(
+        2,
+        "req-123",
+        "PENDING",
+      );
+      expect(mockRepositoryInstance.update).not.toHaveBeenCalled();
+    });
+
+    it("should revert status to PENDING and rethrow error when repository.update fails after AI processing", async () => {
+      const service = new RefundService();
+
+      mockRepositoryInstance.findById.mockResolvedValue(mockPendingRequest);
+      mockRepositoryInstance.updateStatus.mockResolvedValue({
+        ...mockPendingRequest,
+        status: "PROCESSING",
+      });
+      vi.mocked(processReceiptWithAI).mockResolvedValue(mockExtractedData);
+      mockRepositoryInstance.update.mockRejectedValue(
+        new Error("Database update error"),
+      );
+
+      await expect(service.approveAndProcessReceipt("req-123")).rejects.toThrow(
+        "Database update error",
+      );
+
+      expect(mockRepositoryInstance.updateStatus).toHaveBeenNthCalledWith(
+        1,
+        "req-123",
+        "PROCESSING",
+      );
+      expect(mockRepositoryInstance.updateStatus).toHaveBeenNthCalledWith(
+        2,
+        "req-123",
+        "PENDING",
+      );
     });
   });
 });

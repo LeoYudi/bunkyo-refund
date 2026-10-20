@@ -2,9 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import type { z } from "zod";
-import type { RefundSchema } from "@/models/refund.model";
+import type { RefundRequest, RefundSchema } from "@/models/refund.model";
 import { CreateRefundSchema } from "@/models/refund.model";
-import type { RefundRequest } from "@/repositories/refund.repository";
 import { RefundService } from "@/services/refund.service";
 
 export type SubmitRefundResult =
