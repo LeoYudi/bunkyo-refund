@@ -64,9 +64,9 @@ export function ReceiptModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         showCloseButton={false}
-        className="max-w-5xl h-[92vh] flex flex-col overflow-hidden p-0 gap-0"
+        className="max-w-5xl sm:max-w-5xl h-[92vh] flex flex-col overflow-hidden !p-0 !gap-0"
       >
-        <DialogHeader className="px-6 py-4 border-b border-border bg-muted/30 shrink-0 flex flex-row items-center justify-between space-y-0">
+        <DialogHeader className="px-4 py-3 border-b border-border bg-muted/30 shrink-0 flex flex-row items-center justify-between space-y-0">
           <div>
             <DialogTitle>Visualização de Comprovante</DialogTitle>
             <DialogDescription className="sr-only">
@@ -100,7 +100,7 @@ export function ReceiptModal({
           </div>
         </DialogHeader>
 
-        <div className="p-6 flex-1 overflow-auto flex items-center justify-center bg-muted/10">
+        <div className="p-3 flex-1 overflow-auto flex items-center justify-center bg-muted/10">
           {receiptUrl ? (
             isImage ? (
               // biome-ignore lint/performance/noImgElement: External receipt URLs cannot be optimized by Next.js Image component statically

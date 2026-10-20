@@ -1,5 +1,20 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { SubmitRefundForm } from "./submit-refund-form";
 
 // Mock URL.createObjectURL since ReceiptPreview uses it
@@ -12,6 +27,20 @@ afterAll(() => {
 });
 
 describe("SubmitRefundForm", () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    consoleErrorSpy = vi.spyOn(console, "error");
+  });
+
+  afterEach(() => {
+    for (const call of consoleErrorSpy.mock.calls) {
+      const message = typeof call[0] === "string" ? call[0] : "";
+      expect(message).not.toContain("not wrapped in act");
+    }
+    consoleErrorSpy.mockRestore();
+  });
+
   it("renders an input for 'Nome Completo'", () => {
     render(<SubmitRefundForm onSubmitAction={vi.fn()} />);
     const input = screen.getByLabelText(/nome completo/i);
@@ -36,7 +65,9 @@ describe("SubmitRefundForm", () => {
     expect(fileInput).toBeInTheDocument();
     if (!fileInput) return;
 
-    fireEvent.change(fileInput, { target: { files: [file] } });
+    await act(async () => {
+      fireEvent.change(fileInput, { target: { files: [file] } });
+    });
 
     await waitFor(() => {
       expect(
@@ -62,12 +93,16 @@ describe("SubmitRefundForm", () => {
     expect(fileInput).toBeInTheDocument();
     if (!fileInput) return;
 
-    fireEvent.change(fileInput, { target: { files: [file] } });
+    await act(async () => {
+      fireEvent.change(fileInput, { target: { files: [file] } });
+    });
 
     const cancelButton = await screen.findByRole("button", {
       name: /cancelar/i,
     });
-    fireEvent.click(cancelButton);
+    await act(async () => {
+      fireEvent.click(cancelButton);
+    });
 
     await waitFor(() => {
       expect(
@@ -90,12 +125,16 @@ describe("SubmitRefundForm", () => {
     expect(fileInput).toBeInTheDocument();
     if (!fileInput) return;
 
-    fireEvent.change(fileInput, { target: { files: [file] } });
+    await act(async () => {
+      fireEvent.change(fileInput, { target: { files: [file] } });
+    });
 
     const confirmButton = await screen.findByRole("button", {
       name: /confirmar/i,
     });
-    fireEvent.click(confirmButton);
+    await act(async () => {
+      fireEvent.click(confirmButton);
+    });
 
     await waitFor(() => {
       expect(onSubmitAction).not.toHaveBeenCalled();
@@ -110,7 +149,9 @@ describe("SubmitRefundForm", () => {
 
     const nameInput = screen.getByLabelText(/nome completo/i);
     expect(nameInput).toBeInTheDocument();
-    fireEvent.change(nameInput, { target: { value: "A" } });
+    await act(async () => {
+      fireEvent.change(nameInput, { target: { value: "A" } });
+    });
 
     const file = new File(["dummy content"], "receipt.png", {
       type: "image/png",
@@ -119,12 +160,16 @@ describe("SubmitRefundForm", () => {
     expect(fileInput).toBeInTheDocument();
     if (!fileInput) return;
 
-    fireEvent.change(fileInput, { target: { files: [file] } });
+    await act(async () => {
+      fireEvent.change(fileInput, { target: { files: [file] } });
+    });
 
     const confirmButton = await screen.findByRole("button", {
       name: /confirmar/i,
     });
-    fireEvent.click(confirmButton);
+    await act(async () => {
+      fireEvent.click(confirmButton);
+    });
 
     await waitFor(() => {
       expect(onSubmitAction).not.toHaveBeenCalled();
@@ -139,7 +184,9 @@ describe("SubmitRefundForm", () => {
 
     const nameInput = screen.getByLabelText(/nome completo/i);
     expect(nameInput).toBeInTheDocument();
-    fireEvent.change(nameInput, { target: { value: "John Doe" } });
+    await act(async () => {
+      fireEvent.change(nameInput, { target: { value: "John Doe" } });
+    });
 
     // File > 5MB
     const largeContent = new Array(6 * 1024 * 1024).fill("a").join("");
@@ -148,12 +195,16 @@ describe("SubmitRefundForm", () => {
     expect(fileInput).toBeInTheDocument();
     if (!fileInput) return;
 
-    fireEvent.change(fileInput, { target: { files: [file] } });
+    await act(async () => {
+      fireEvent.change(fileInput, { target: { files: [file] } });
+    });
 
     const confirmButton = await screen.findByRole("button", {
       name: /confirmar/i,
     });
-    fireEvent.click(confirmButton);
+    await act(async () => {
+      fireEvent.click(confirmButton);
+    });
 
     await waitFor(() => {
       expect(onSubmitAction).not.toHaveBeenCalled();
@@ -168,7 +219,9 @@ describe("SubmitRefundForm", () => {
 
     const nameInput = screen.getByLabelText(/nome completo/i);
     expect(nameInput).toBeInTheDocument();
-    fireEvent.change(nameInput, { target: { value: "John Doe" } });
+    await act(async () => {
+      fireEvent.change(nameInput, { target: { value: "John Doe" } });
+    });
 
     const file = new File(["dummy content"], "receipt.txt", {
       type: "text/plain",
@@ -177,12 +230,16 @@ describe("SubmitRefundForm", () => {
     expect(fileInput).toBeInTheDocument();
     if (!fileInput) return;
 
-    fireEvent.change(fileInput, { target: { files: [file] } });
+    await act(async () => {
+      fireEvent.change(fileInput, { target: { files: [file] } });
+    });
 
     const confirmButton = await screen.findByRole("button", {
       name: /confirmar/i,
     });
-    fireEvent.click(confirmButton);
+    await act(async () => {
+      fireEvent.click(confirmButton);
+    });
 
     await waitFor(() => {
       expect(onSubmitAction).not.toHaveBeenCalled();
@@ -197,7 +254,9 @@ describe("SubmitRefundForm", () => {
 
     const nameInput = screen.getByLabelText(/nome completo/i);
     expect(nameInput).toBeInTheDocument();
-    fireEvent.change(nameInput, { target: { value: "John Doe" } });
+    await act(async () => {
+      fireEvent.change(nameInput, { target: { value: "John Doe" } });
+    });
 
     const file = new File(["dummy content"], "receipt.png", {
       type: "image/png",
@@ -206,12 +265,16 @@ describe("SubmitRefundForm", () => {
     expect(fileInput).toBeInTheDocument();
     if (!fileInput) return;
 
-    fireEvent.change(fileInput, { target: { files: [file] } });
+    await act(async () => {
+      fireEvent.change(fileInput, { target: { files: [file] } });
+    });
 
     const confirmButton = await screen.findByRole("button", {
       name: /confirmar/i,
     });
-    fireEvent.click(confirmButton);
+    await act(async () => {
+      fireEvent.click(confirmButton);
+    });
 
     await waitFor(() => {
       expect(onSubmitAction).toHaveBeenCalledTimes(1);

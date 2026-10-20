@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   CreateRefundSchema,
+  REFUND_LIFECYCLE_STEPS,
+  REFUND_STATUS_MAP,
+  ReceiptAIExtractionSchema,
   RefundSchema,
   RefundStatusSchema,
   UpdateRefundSchema,
@@ -199,6 +202,107 @@ describe("Refund Models", () => {
         updated_at: "2023-01-01T00:00:00.000Z",
       };
       expect(RefundSchema.safeParse(record).success).toBe(false);
+    });
+  });
+
+  describe("REFUND_STATUS_MAP", () => {
+    it("should contain entries for all 6 statuses in RefundStatusSchema.options", () => {
+      for (const status of RefundStatusSchema.options) {
+        expect(REFUND_STATUS_MAP).toHaveProperty(status);
+      }
+      expect(Object.keys(REFUND_STATUS_MAP)).toHaveLength(
+        RefundStatusSchema.options.length,
+      );
+    });
+
+    it("should map each status with exact label, description, and badgeVariant", () => {
+      expect(REFUND_STATUS_MAP).toEqual({
+        PENDING: {
+          label: "Pendente",
+          description:
+            "Recebido do formulário público e aguardando triagem do administrador.",
+          badgeVariant: "pending",
+        },
+        PROCESSING: {
+          label: "Processando",
+          description:
+            "Nota fiscal em leitura e extração de dados pela IA (Gemini).",
+          badgeVariant: "processing",
+        },
+        APPROVED: {
+          label: "Aprovado",
+          description:
+            "Dados extraídos e validados, pronto para envio em lote.",
+          badgeVariant: "approved",
+        },
+        DENIED: {
+          label: "Negado",
+          description: "Pedido recusado ou invalidado na triagem.",
+          badgeVariant: "denied",
+        },
+        SENT: {
+          label: "Enviado",
+          description:
+            "Lote consolidado e encaminhado por e-mail ao financeiro.",
+          badgeVariant: "sent",
+        },
+        PAID: {
+          label: "Pago",
+          description: "Reembolso efetuado e concluído pelo financeiro.",
+          badgeVariant: "paid",
+        },
+      });
+    });
+  });
+
+  describe("REFUND_LIFECYCLE_STEPS", () => {
+    it("should contain the exact sequential order of lifecycle steps", () => {
+      expect(REFUND_LIFECYCLE_STEPS).toEqual([
+        "PENDING",
+        "PROCESSING",
+        "APPROVED",
+        "SENT",
+        "PAID",
+      ]);
+    });
+  });
+
+  describe("ReceiptAIExtractionSchema", () => {
+    const basePayload = {
+      issuer_name: "Bunkyo Store",
+      issuer_cnpj: "12.345.678/0001-99",
+      receiver_cnpj: "98.765.432/0001-11",
+      total_value: 120.5,
+      issue_number: "NF-001",
+      description: "Materiais de escritório",
+    };
+
+    it("should normalize issue_date from DD/MM/YYYY and DD-MM-YYYY to YYYY-MM-DD", () => {
+      const parsedSlash = ReceiptAIExtractionSchema.parse({
+        ...basePayload,
+        issue_date: "16/03/2026",
+      });
+      expect(parsedSlash.issue_date).toBe("2026-03-16");
+
+      const parsedDash = ReceiptAIExtractionSchema.parse({
+        ...basePayload,
+        issue_date: "16-03-2026",
+      });
+      expect(parsedDash.issue_date).toBe("2026-03-16");
+    });
+
+    it("should keep issue_date when already in YYYY-MM-DD format and allow null", () => {
+      const parsedIso = ReceiptAIExtractionSchema.parse({
+        ...basePayload,
+        issue_date: "2026-03-16",
+      });
+      expect(parsedIso.issue_date).toBe("2026-03-16");
+
+      const parsedNull = ReceiptAIExtractionSchema.parse({
+        ...basePayload,
+        issue_date: null,
+      });
+      expect(parsedNull.issue_date).toBeNull();
     });
   });
 });
