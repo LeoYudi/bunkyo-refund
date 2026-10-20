@@ -2,7 +2,10 @@
 
 import { Eye, Loader2 } from "lucide-react";
 import { useState } from "react";
-import { processReceiptAction } from "@/actions/ai.actions";
+import {
+  processBatchReceiptsAction,
+  processReceiptAction,
+} from "@/actions/ai.actions";
 import { REFUND_STATUS_MAP, type RefundRequest } from "@/models/refund.model";
 import { Badge } from "./badge";
 import { BatchPaymentDialog } from "./batch-payment-dialog";
@@ -14,12 +17,14 @@ export type { RefundRequest };
 export interface RequestsTableProps {
   requests: RefundRequest[];
   onProcessRequest?: (requestId: string) => Promise<void> | void;
+  onProcessBatch?: (requestIds: string[]) => Promise<void> | void;
   onConfirmBatch?: (selectedRequests: RefundRequest[]) => void | Promise<void>;
 }
 
 export function RequestsTable({
   requests,
   onProcessRequest,
+  onProcessBatch,
   onConfirmBatch,
 }: RequestsTableProps) {
   const [selectedReceiptUrl, setSelectedReceiptUrl] = useState<string | null>(
@@ -27,19 +32,22 @@ export function RequestsTable({
   );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false);
 
-  const approvedRequests = requests.filter((r) => r.status === "APPROVED");
-  const hasApprovedRequests = approvedRequests.length > 0;
-  const allApprovedSelected =
-    hasApprovedRequests &&
-    approvedRequests.every((r) => selectedIds.includes(r.id));
+  const selectableRequests = requests.filter(
+    (r) => r.status === "PENDING" || r.status === "APPROVED",
+  );
+  const hasSelectableRequests = selectableRequests.length > 0;
+  const allSelectableSelected =
+    hasSelectableRequests &&
+    selectableRequests.every((r) => selectedIds.includes(r.id));
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedIds(approvedRequests.map((r) => r.id));
+      setSelectedIds(selectableRequests.map((r) => r.id));
     } else {
       setSelectedIds([]);
     }
@@ -50,6 +58,41 @@ export function RequestsTable({
       setSelectedIds((prev) => [...prev, id]);
     } else {
       setSelectedIds((prev) => prev.filter((i) => i !== id));
+    }
+  };
+
+  const selectedPendingIds = selectedIds.filter(
+    (id) => requests.find((r) => r.id === id)?.status === "PENDING",
+  );
+  const selectedApprovedRequests = requests.filter(
+    (r) => selectedIds.includes(r.id) && r.status === "APPROVED",
+  );
+
+  const handleProcessBatch = async () => {
+    if (selectedPendingIds.length === 0) return;
+    setIsBatchProcessing(true);
+    setErrorMessage(null);
+    try {
+      let result: { success: boolean; error?: string } | undefined;
+      if (onProcessBatch) {
+        await onProcessBatch(selectedPendingIds);
+      } else {
+        result = await processBatchReceiptsAction(selectedPendingIds);
+      }
+      if (result && !result.success) {
+        setErrorMessage(
+          result.error || "Erro ao processar solicitações em lote",
+        );
+      } else {
+        // Remove processed PENDING IDs from selection
+        setSelectedIds((prev) =>
+          prev.filter((id) => !selectedPendingIds.includes(id)),
+        );
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsBatchProcessing(false);
     }
   };
 
@@ -79,13 +122,25 @@ export function RequestsTable({
         <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
           {selectedIds.length} selecionado(s)
         </span>
-        <Button
-          type="button"
-          disabled={selectedIds.length === 0}
-          onClick={() => setIsBatchDialogOpen(true)}
-        >
-          Enviar Pagamentos em Lote
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            disabled={selectedPendingIds.length === 0 || isBatchProcessing}
+            onClick={handleProcessBatch}
+          >
+            {isBatchProcessing && (
+              <Loader2 className="size-4 animate-spin mr-1.5" />
+            )}
+            Aprovar para Leitura em Lote
+          </Button>
+          <Button
+            type="button"
+            disabled={selectedApprovedRequests.length === 0}
+            onClick={() => setIsBatchDialogOpen(true)}
+          >
+            Enviar Pagamentos em Lote
+          </Button>
+        </div>
       </div>
 
       <div className="overflow-x-auto">
@@ -104,8 +159,8 @@ export function RequestsTable({
                 <input
                   type="checkbox"
                   aria-label="Selecionar todas as solicitações aprovadas"
-                  disabled={!hasApprovedRequests}
-                  checked={allApprovedSelected}
+                  disabled={!hasSelectableRequests}
+                  checked={allSelectableSelected}
                   onChange={(e) => handleSelectAll(e.target.checked)}
                   className="rounded border-gray-300 text-primary focus:ring-primary dark:border-gray-600 dark:bg-gray-700"
                 />
@@ -146,7 +201,8 @@ export function RequestsTable({
             ) : (
               requests.map((req) => {
                 const currentStatus = REFUND_STATUS_MAP[req.status];
-                const isApproved = req.status === "APPROVED";
+                const isSelectable =
+                  req.status === "PENDING" || req.status === "APPROVED";
                 const isSelected = selectedIds.includes(req.id);
                 return (
                   <tr
@@ -157,7 +213,7 @@ export function RequestsTable({
                       <input
                         type="checkbox"
                         aria-label={`Selecionar solicitação de ${req.requester_name}`}
-                        disabled={!isApproved}
+                        disabled={!isSelectable}
                         checked={isSelected}
                         onChange={(e) =>
                           handleSelectOne(req.id, e.target.checked)
@@ -239,7 +295,7 @@ export function RequestsTable({
         <BatchPaymentDialog
           isOpen={isBatchDialogOpen}
           onClose={() => setIsBatchDialogOpen(false)}
-          selectedRequests={requests.filter((r) => selectedIds.includes(r.id))}
+          selectedRequests={selectedApprovedRequests}
           onConfirm={onConfirmBatch}
         />
       </div>

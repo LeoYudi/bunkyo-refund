@@ -86,7 +86,24 @@ export class RefundService {
     succeeded: RefundRequest[];
     failed: Array<{ id: string; error: string }>;
   }> {
-    void requestIds;
-    throw new Error("Not implemented");
+    const results = await Promise.allSettled(
+      requestIds.map((id) => this.approveAndProcessReceipt(id)),
+    );
+
+    const succeeded: RefundRequest[] = [];
+    const failed: Array<{ id: string; error: string }> = [];
+
+    results.forEach((res, index) => {
+      const id = requestIds[index];
+      if (res.status === "fulfilled") {
+        succeeded.push(res.value);
+      } else {
+        const errorMsg =
+          res.reason instanceof Error ? res.reason.message : String(res.reason);
+        failed.push({ id, error: errorMsg });
+      }
+    });
+
+    return { succeeded, failed };
   }
 }

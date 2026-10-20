@@ -28,6 +28,28 @@ export async function processBatchReceiptsAction(
   };
   error?: string;
 }> {
-  void requestIds;
-  throw new Error("Not implemented");
+  if (!requestIds || requestIds.length === 0) {
+    return { success: false, error: "Nenhuma solicitação selecionada" };
+  }
+
+  try {
+    const refundService = new RefundService();
+    const data = await refundService.approveAndProcessBatchReceipts(requestIds);
+    revalidatePath("/admin");
+
+    if (data.failed.length > 0) {
+      return {
+        success: false,
+        data,
+        error: `Falha ao processar ${data.failed.length} solicitação(ões): ${data.failed
+          .map((f) => f.error)
+          .join(", ")}`,
+      };
+    }
+
+    return { success: true, data };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { success: false, error: errorMessage };
+  }
 }
