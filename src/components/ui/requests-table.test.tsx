@@ -242,11 +242,11 @@ describe("RequestsTable", () => {
       expect(screen.getByText("Ações")).toBeInTheDocument();
     });
 
-    it("should render empty state cell spanning all 8 columns when requests is empty", () => {
+    it("should render empty state cell spanning all 9 columns when requests is empty", () => {
       render(<RequestsTable requests={[]} />);
 
       const emptyCell = screen.getByText("Nenhuma solicitação encontrada.");
-      expect(emptyCell).toHaveAttribute("colspan", "8");
+      expect(emptyCell).toHaveAttribute("colspan", "9");
     });
 
     it("should display extracted data (issuer_name, issuer_cnpj, total_value in BRL currency) and '-' for null values", () => {
@@ -435,6 +435,233 @@ describe("RequestsTable", () => {
       expect(screen.queryByText("DENIED")).not.toBeInTheDocument();
       expect(screen.queryByText("SENT")).not.toBeInTheDocument();
       expect(screen.queryByText("PAID")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("Bulk Selection and BatchPaymentDialog", () => {
+    const bulkMockRequests: RefundRequest[] = [
+      {
+        id: "req-pending",
+        requester_name: "Alice Pendente",
+        status: "PENDING",
+        created_at: new Date("2026-10-01T10:00:00Z").toISOString(),
+        updated_at: new Date("2026-10-01T10:00:00Z").toISOString(),
+        description: null,
+        issue_date: null,
+        issue_number: null,
+        issuer_cnpj: null,
+        issuer_name: null,
+        receipt_file_url: "https://example.com/1.pdf",
+        receiver_cnpj: null,
+        reviewed_by: null,
+        total_value: 100.0,
+      },
+      {
+        id: "req-approved-1",
+        requester_name: "Bruno Aprovado",
+        status: "APPROVED",
+        created_at: new Date("2026-10-02T10:00:00Z").toISOString(),
+        updated_at: new Date("2026-10-02T10:00:00Z").toISOString(),
+        description: "Material de escritório",
+        issue_date: "2026-10-02",
+        issue_number: "NF-201",
+        issuer_cnpj: "12.345.678/0001-90",
+        issuer_name: "Papelaria Central",
+        receipt_file_url: "https://example.com/2.pdf",
+        receiver_cnpj: null,
+        reviewed_by: "admin-1",
+        total_value: 250.75,
+      },
+      {
+        id: "req-approved-2",
+        requester_name: "Carla Aprovada",
+        status: "APPROVED",
+        created_at: new Date("2026-10-03T10:00:00Z").toISOString(),
+        updated_at: new Date("2026-10-03T10:00:00Z").toISOString(),
+        description: "Hospedagem evento",
+        issue_date: "2026-10-03",
+        issue_number: "NF-202",
+        issuer_cnpj: "98.765.432/0001-10",
+        issuer_name: "Hotel Sol",
+        receipt_file_url: "https://example.com/3.pdf",
+        receiver_cnpj: null,
+        reviewed_by: "admin-1",
+        total_value: 349.25,
+      },
+      {
+        id: "req-processing",
+        requester_name: "Diego Processando",
+        status: "PROCESSING",
+        created_at: new Date("2026-10-04T10:00:00Z").toISOString(),
+        updated_at: new Date("2026-10-04T10:00:00Z").toISOString(),
+        description: null,
+        issue_date: null,
+        issue_number: null,
+        issuer_cnpj: null,
+        issuer_name: null,
+        receipt_file_url: "https://example.com/4.pdf",
+        receiver_cnpj: null,
+        reviewed_by: null,
+        total_value: null,
+      },
+      {
+        id: "req-denied",
+        requester_name: "Eduarda Negada",
+        status: "DENIED",
+        created_at: new Date("2026-10-05T10:00:00Z").toISOString(),
+        updated_at: new Date("2026-10-05T10:00:00Z").toISOString(),
+        description: null,
+        issue_date: null,
+        issue_number: null,
+        issuer_cnpj: null,
+        issuer_name: null,
+        receipt_file_url: "https://example.com/5.pdf",
+        receiver_cnpj: null,
+        reviewed_by: null,
+        total_value: null,
+      },
+      {
+        id: "req-sent",
+        requester_name: "Felipe Enviado",
+        status: "SENT",
+        created_at: new Date("2026-10-06T10:00:00Z").toISOString(),
+        updated_at: new Date("2026-10-06T10:00:00Z").toISOString(),
+        description: null,
+        issue_date: null,
+        issue_number: null,
+        issuer_cnpj: null,
+        issuer_name: null,
+        receipt_file_url: "https://example.com/6.pdf",
+        receiver_cnpj: null,
+        reviewed_by: null,
+        total_value: 80.0,
+      },
+      {
+        id: "req-paid",
+        requester_name: "Gabriela Paga",
+        status: "PAID",
+        created_at: new Date("2026-10-07T10:00:00Z").toISOString(),
+        updated_at: new Date("2026-10-07T10:00:00Z").toISOString(),
+        description: null,
+        issue_date: null,
+        issue_number: null,
+        issuer_cnpj: null,
+        issuer_name: null,
+        receipt_file_url: "https://example.com/7.pdf",
+        receiver_cnpj: null,
+        reviewed_by: null,
+        total_value: 120.0,
+      },
+    ];
+
+    it("should render row checkboxes and a 'Selecionar todas as solicitações aprovadas' header checkbox", () => {
+      render(<RequestsTable requests={bulkMockRequests} />);
+
+      const selectAllCheckbox = screen.getByRole("checkbox", {
+        name: /selecionar todas as solicitações aprovadas/i,
+      });
+      expect(selectAllCheckbox).toBeInTheDocument();
+
+      const allCheckboxes = screen.getAllByRole("checkbox");
+      // 1 header checkbox + 7 row checkboxes
+      expect(allCheckboxes).toHaveLength(8);
+    });
+
+    it("should enable checkboxes only for APPROVED rows and disable them for PENDING, PROCESSING, DENIED, SENT, and PAID rows", () => {
+      render(<RequestsTable requests={bulkMockRequests} />);
+
+      const allCheckboxes = screen.getAllByRole("checkbox");
+      // Index 0 is header checkbox; indices 1..7 correspond to bulkMockRequests[0..6]
+      const [
+        ,
+        pendingCb,
+        approved1Cb,
+        approved2Cb,
+        processingCb,
+        deniedCb,
+        sentCb,
+        paidCb,
+      ] = allCheckboxes;
+
+      expect(pendingCb).toBeDisabled();
+      expect(approved1Cb).not.toBeDisabled();
+      expect(approved2Cb).not.toBeDisabled();
+      expect(processingCb).toBeDisabled();
+      expect(deniedCb).toBeDisabled();
+      expect(sentCb).toBeDisabled();
+      expect(paidCb).toBeDisabled();
+    });
+
+    it("should display the top action bar with '0 selecionado(s)' and disabled 'Enviar Pagamentos em Lote' button initially", () => {
+      render(<RequestsTable requests={bulkMockRequests} />);
+
+      expect(screen.getByText(/0 selecionado\(s\)/i)).toBeInTheDocument();
+
+      const batchButton = screen.getByRole("button", {
+        name: /enviar pagamentos em lote/i,
+      });
+      expect(batchButton).toBeInTheDocument();
+      expect(batchButton).toBeDisabled();
+    });
+
+    it("should update selected count and enable 'Enviar Pagamentos em Lote' button when an APPROVED row checkbox is checked", () => {
+      render(<RequestsTable requests={bulkMockRequests} />);
+
+      const allCheckboxes = screen.getAllByRole("checkbox");
+      const approved1Cb = allCheckboxes[2];
+
+      fireEvent.click(approved1Cb);
+
+      expect(screen.getByText(/1 selecionado\(s\)/i)).toBeInTheDocument();
+
+      const batchButton = screen.getByRole("button", {
+        name: /enviar pagamentos em lote/i,
+      });
+      expect(batchButton).not.toBeDisabled();
+    });
+
+    it("should select all APPROVED requests when header checkbox is checked and clear selection when unchecked", () => {
+      render(<RequestsTable requests={bulkMockRequests} />);
+
+      const selectAllCheckbox = screen.getByRole("checkbox", {
+        name: /selecionar todas as solicitações aprovadas/i,
+      });
+
+      fireEvent.click(selectAllCheckbox);
+
+      expect(screen.getByText(/2 selecionado\(s\)/i)).toBeInTheDocument();
+
+      const allCheckboxes = screen.getAllByRole("checkbox");
+      expect(allCheckboxes[2]).toBeChecked();
+      expect(allCheckboxes[3]).toBeChecked();
+      expect(allCheckboxes[1]).not.toBeChecked();
+
+      fireEvent.click(selectAllCheckbox);
+
+      expect(screen.getByText(/0 selecionado\(s\)/i)).toBeInTheDocument();
+      expect(allCheckboxes[2]).not.toBeChecked();
+      expect(allCheckboxes[3]).not.toBeChecked();
+    });
+
+    it("should open BatchPaymentDialog showing selected items and consolidated total value when 'Enviar Pagamentos em Lote' is clicked", () => {
+      render(<RequestsTable requests={bulkMockRequests} />);
+
+      const selectAllCheckbox = screen.getByRole("checkbox", {
+        name: /selecionar todas as solicitações aprovadas/i,
+      });
+      fireEvent.click(selectAllCheckbox);
+
+      const batchButton = screen.getByRole("button", {
+        name: /enviar pagamentos em lote/i,
+      });
+      fireEvent.click(batchButton);
+
+      const dialog = screen.getByRole("dialog");
+      expect(dialog).toBeInTheDocument();
+      expect(
+        screen.getByText(/2 solicitaç(ões|oes) selecionadas/i),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/R\$\s*600,00/)).toBeInTheDocument();
     });
   });
 });
