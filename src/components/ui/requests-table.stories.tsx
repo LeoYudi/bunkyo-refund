@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import type { Database } from "@/models/database.types";
 import { RequestsTable } from "./requests-table";
+import { StatusLifecycle } from "./status-lifecycle";
 
 type RefundRequest = Database["public"]["Tables"]["refund_requests"]["Row"];
 
@@ -124,5 +125,19 @@ export const Default: Story = {
 export const Empty: Story = {
   args: {
     requests: [],
+  },
+};
+
+export const WithStatusLifecycle: Story = {
+  render: (args) => (
+    <div className="space-y-6">
+      <StatusLifecycle />
+      <div className="bg-card border rounded-lg overflow-hidden shadow-sm">
+        <RequestsTable {...args} />
+      </div>
+    </div>
+  ),
+  args: {
+    requests: mockRequests,
   },
 };
