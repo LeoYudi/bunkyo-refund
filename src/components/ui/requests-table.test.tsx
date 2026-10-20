@@ -65,8 +65,8 @@ describe("RequestsTable", () => {
     // Should render names and statuses
     expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.getByText("Bob")).toBeInTheDocument();
-    expect(screen.getByText("PENDING")).toBeInTheDocument();
-    expect(screen.getByText("APPROVED")).toBeInTheDocument();
+    expect(screen.getByText("Pendente")).toBeInTheDocument();
+    expect(screen.getByText("Aprovado")).toBeInTheDocument();
   });
 
   describe("Anexo Column and ReceiptModal Integration", () => {
@@ -320,6 +320,121 @@ describe("RequestsTable", () => {
       const alert = await screen.findByRole("alert");
       expect(alert).toBeInTheDocument();
       expect(alert).toHaveTextContent("Falha ao processar nota fiscal");
+    });
+  });
+
+  describe("Status Badges and Color Theory", () => {
+    const createRequestWithStatus = (
+      id: string,
+      status: RefundRequest["status"],
+    ): RefundRequest => ({
+      id,
+      requester_name: `User ${status}`,
+      status,
+      created_at: new Date("2026-10-01T10:00:00Z").toISOString(),
+      updated_at: new Date("2026-10-01T10:00:00Z").toISOString(),
+      description: null,
+      issue_date: null,
+      issue_number: null,
+      issuer_cnpj: null,
+      issuer_name: null,
+      receipt_file_url: `https://example.com/${id}.pdf`,
+      receiver_cnpj: null,
+      reviewed_by: null,
+      total_value: null,
+    });
+
+    it("should render PENDING status as a gray/neutral Badge with label 'Pendente'", () => {
+      render(
+        <RequestsTable requests={[createRequestWithStatus("1", "PENDING")]} />,
+      );
+
+      const badgeText = screen.getByText("Pendente");
+      const badge = badgeText.closest('[data-slot="badge"]') ?? badgeText;
+      expect(badge).toHaveAttribute("data-slot", "badge");
+      expect(badge.className).toMatch(/gray|zinc|neutral|muted|slate/i);
+    });
+
+    it("should render PROCESSING status as a yellow/amber Badge with label 'Processando'", () => {
+      render(
+        <RequestsTable
+          requests={[createRequestWithStatus("2", "PROCESSING")]}
+        />,
+      );
+
+      const badgeText = screen.getByText("Processando");
+      const badge = badgeText.closest('[data-slot="badge"]') ?? badgeText;
+      expect(badge).toHaveAttribute("data-slot", "badge");
+      expect(badge.className).toMatch(/amber|yellow/i);
+    });
+
+    it("should render APPROVED status as a blue Badge with label 'Aprovado'", () => {
+      render(
+        <RequestsTable requests={[createRequestWithStatus("3", "APPROVED")]} />,
+      );
+
+      const badgeText = screen.getByText("Aprovado");
+      const badge = badgeText.closest('[data-slot="badge"]') ?? badgeText;
+      expect(badge).toHaveAttribute("data-slot", "badge");
+      expect(badge.className).toMatch(/blue/i);
+    });
+
+    it("should render DENIED status as a red/destructive Badge with label 'Negado'", () => {
+      render(
+        <RequestsTable requests={[createRequestWithStatus("4", "DENIED")]} />,
+      );
+
+      const badgeText = screen.getByText("Negado");
+      const badge = badgeText.closest('[data-slot="badge"]') ?? badgeText;
+      expect(badge).toHaveAttribute("data-slot", "badge");
+      expect(badge.className).toMatch(/red|destructive/i);
+    });
+
+    it("should render SENT status as a purple/violet Badge with label 'Enviado'", () => {
+      render(
+        <RequestsTable requests={[createRequestWithStatus("5", "SENT")]} />,
+      );
+
+      const badgeText = screen.getByText("Enviado");
+      const badge = badgeText.closest('[data-slot="badge"]') ?? badgeText;
+      expect(badge).toHaveAttribute("data-slot", "badge");
+      expect(badge.className).toMatch(/purple|violet/i);
+    });
+
+    it("should render PAID status as a green/emerald Badge with label 'Pago'", () => {
+      render(
+        <RequestsTable requests={[createRequestWithStatus("6", "PAID")]} />,
+      );
+
+      const badgeText = screen.getByText("Pago");
+      const badge = badgeText.closest('[data-slot="badge"]') ?? badgeText;
+      expect(badge).toHaveAttribute("data-slot", "badge");
+      expect(badge.className).toMatch(/green|emerald/i);
+    });
+
+    it("should render all 6 status badges simultaneously without raw English enum strings", () => {
+      const allStatusRequests: RefundRequest[] = [
+        createRequestWithStatus("1", "PENDING"),
+        createRequestWithStatus("2", "PROCESSING"),
+        createRequestWithStatus("3", "APPROVED"),
+        createRequestWithStatus("4", "DENIED"),
+        createRequestWithStatus("5", "SENT"),
+        createRequestWithStatus("6", "PAID"),
+      ];
+
+      const { container } = render(
+        <RequestsTable requests={allStatusRequests} />,
+      );
+
+      const badges = container.querySelectorAll('[data-slot="badge"]');
+      expect(badges).toHaveLength(6);
+
+      expect(screen.queryByText("PENDING")).not.toBeInTheDocument();
+      expect(screen.queryByText("PROCESSING")).not.toBeInTheDocument();
+      expect(screen.queryByText("APPROVED")).not.toBeInTheDocument();
+      expect(screen.queryByText("DENIED")).not.toBeInTheDocument();
+      expect(screen.queryByText("SENT")).not.toBeInTheDocument();
+      expect(screen.queryByText("PAID")).not.toBeInTheDocument();
     });
   });
 });
