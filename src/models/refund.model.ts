@@ -64,3 +64,23 @@ export const ReceiptAIExtractionSchema = z.object({
   issue_number: z.string().nullable(),
   description: z.string().nullable(),
 });
+
+export type RefundStatus = z.infer<typeof RefundStatusSchema>;
+
+export interface RefundStatusMetadata {
+  label: string;
+  description: string;
+  badgeVariant:
+    | "pending"
+    | "processing"
+    | "approved"
+    | "denied"
+    | "sent"
+    | "paid";
+}
+
+export const REFUND_STATUS_MAP: Partial<
+  Record<RefundStatus, RefundStatusMetadata>
+> = {};
+
+export const REFUND_LIFECYCLE_STEPS: readonly RefundStatus[] = [];
