@@ -1,5 +1,6 @@
 import { getRefundRequestsAction } from "@/actions/refund.actions";
 import { RequestsTable } from "@/components/ui/requests-table";
+import { StatusLifecycle } from "@/components/ui/status-lifecycle";
 
 export default async function AdminDashboardPage() {
   const result = await getRefundRequestsAction();
@@ -25,6 +26,10 @@ export default async function AdminDashboardPage() {
           Gerencie e avalie os pedidos de reembolso enviados pelos
           colaboradores.
         </p>
+      </div>
+
+      <div className="mb-6">
+        <StatusLifecycle />
       </div>
 
       <div className="bg-card border rounded-lg overflow-hidden shadow-sm">

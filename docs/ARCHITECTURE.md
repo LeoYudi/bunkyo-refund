@@ -29,7 +29,7 @@ Plataforma "Backend as a Service" (BaaS) baseada em PostgreSQL.
 
 ### 3. Motor de Inteligência Artificial: Google Gemini
 Responsável pela lógica central de OCR (Optical Character Recognition) e extração inteligente.
-*   **Modelo Primário:** Gemini 1.5 Flash (Gratuito, super rápido, suporta upload direto de arquivos visuais).
+*   **Modelo Primário:** Gemini 3.8 Flash (`gemini-3.8-flash`) via Interactions API (`@google/genai`) — rápido e com suporte nativo a imagens/PDFs em Base64 e Structured Output.
 *   **Integração:** O backend Next.js fará o proxy do arquivo para a API do Gemini, utilizando a funcionalidade "Structured Output" (forçando o retorno a ser um JSON perfeitamente formatado para o banco de dados).
 
 ### 4. Serviço de Disparo de E-mails: Resend

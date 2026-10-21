@@ -2,11 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import type { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
-import type { RefundSchema } from "@/models/refund.model";
+import type { RefundRequest, RefundSchema } from "@/models/refund.model";
 import { CreateRefundSchema } from "@/models/refund.model";
-import type { RefundRequest } from "@/repositories/refund.repository";
-import { RefundRepository } from "@/repositories/refund.repository";
+import { RefundService } from "@/services/refund.service";
 
 export type SubmitRefundResult =
   | { success: true; data: z.infer<typeof RefundSchema> }
@@ -21,9 +19,8 @@ export async function submitRefundRequest(
   }
 
   try {
-    const supabase = await createClient();
-    const repository = new RefundRepository(supabase);
-    const data = await repository.create(validationResult.data);
+    const refundService = new RefundService();
+    const data = await refundService.createRefundRequest(validationResult.data);
 
     // Purge the client-side router cache for the admin dashboard
     revalidatePath("/admin");
@@ -41,9 +38,8 @@ export type GetRefundRequestsResult =
 
 export async function getRefundRequestsAction(): Promise<GetRefundRequestsResult> {
   try {
-    const supabase = await createClient();
-    const repository = new RefundRepository(supabase);
-    const data = await repository.findAll();
+    const refundService = new RefundService();
+    const data = await refundService.getRefundRequests();
     return { success: true, data };
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
