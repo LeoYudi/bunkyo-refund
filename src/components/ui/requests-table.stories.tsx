@@ -9,6 +9,8 @@ const meta = {
   tags: ["autodocs"],
   argTypes: {
     onProcessRequest: { action: "onProcessRequest" },
+    onProcessBatch: { action: "onProcessBatch" },
+    onConfirmBatch: { action: "onConfirmBatch" },
   },
 } satisfies Meta<typeof RequestsTable>;
 
