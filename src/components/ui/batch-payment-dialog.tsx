@@ -9,6 +9,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./dialog";
+import { Input } from "./input";
+import { Label } from "./label";
 
 export interface BatchPaymentDialogProps {
   isOpen: boolean;
@@ -27,6 +29,7 @@ export function BatchPaymentDialog({
   onConfirm,
 }: BatchPaymentDialogProps) {
   const [isConfirming, setIsConfirming] = React.useState(false);
+  const [recipientEmail, setRecipientEmail] = React.useState("");
 
   const totalSum = selectedRequests.reduce(
     (acc, req) => acc + (req.total_value ?? 0),
@@ -45,7 +48,7 @@ export function BatchPaymentDialog({
     }
     try {
       setIsConfirming(true);
-      await onConfirm(selectedRequests);
+      await onConfirm(selectedRequests, recipientEmail);
       onClose();
     } finally {
       setIsConfirming(false);
@@ -66,20 +69,35 @@ export function BatchPaymentDialog({
           <DialogDescription>{countText}</DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-60 overflow-y-auto space-y-3 py-2 pr-1">
-          {selectedRequests.map((req) => (
-            <div
-              key={req.id}
-              className="flex items-center justify-between text-sm py-1.5 border-b border-gray-100 dark:border-gray-800"
-            >
-              <span className="font-medium text-gray-900 dark:text-white truncate max-w-[200px]">
-                {req.requester_name}
-              </span>
-              <span className="text-gray-600 dark:text-gray-300">
-                {currencyFormatter.format(req.total_value ?? 0)}
-              </span>
-            </div>
-          ))}
+        <div className="space-y-4 py-2">
+          <div className="space-y-2">
+            <Label htmlFor="recipient-email">
+              E-mail do Financeiro (opcional)
+            </Label>
+            <Input
+              id="recipient-email"
+              type="email"
+              placeholder="E-mail do destinatário (financeiro@bunkyo.org.br)"
+              value={recipientEmail}
+              onChange={(e) => setRecipientEmail(e.target.value)}
+            />
+          </div>
+
+          <div className="max-h-60 overflow-y-auto space-y-3 pr-1">
+            {selectedRequests.map((req) => (
+              <div
+                key={req.id}
+                className="flex items-center justify-between text-sm py-1.5 border-b border-gray-100 dark:border-gray-800"
+              >
+                <span className="font-medium text-gray-900 dark:text-white truncate max-w-[200px]">
+                  {req.requester_name}
+                </span>
+                <span className="text-gray-600 dark:text-gray-300">
+                  {currencyFormatter.format(req.total_value ?? 0)}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="flex items-center justify-between py-3 border-t border-gray-200 dark:border-gray-700 font-semibold text-gray-900 dark:text-white">

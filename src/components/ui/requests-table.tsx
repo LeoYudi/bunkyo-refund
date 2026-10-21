@@ -1,11 +1,21 @@
 "use client";
 
-import { CheckCircle, Eye, Loader2, MoreHorizontal } from "lucide-react";
+import {
+  CheckCircle,
+  Download,
+  Eye,
+  Loader2,
+  MoreHorizontal,
+} from "lucide-react";
 import { useState } from "react";
 import {
   processBatchReceiptsAction,
   processReceiptAction,
 } from "@/actions/ai.actions";
+import {
+  exportToCsvAction,
+  sendBatchPaymentEmailAction,
+} from "@/actions/batch.actions";
 import { REFUND_STATUS_MAP, type RefundRequest } from "@/models/refund.model";
 import { Badge } from "./badge";
 import { BatchPaymentDialog } from "./batch-payment-dialog";
@@ -28,6 +38,7 @@ export interface RequestsTableProps {
     selectedRequests: RefundRequest[],
     recipientEmail?: string,
   ) => void | Promise<void>;
+  onExportCsv?: (requestIds: string[]) => Promise<void> | void;
 }
 
 export function RequestsTable({
@@ -35,6 +46,7 @@ export function RequestsTable({
   onProcessRequest,
   onProcessBatch,
   onConfirmBatch,
+  onExportCsv,
 }: RequestsTableProps) {
   const [selectedReceiptUrl, setSelectedReceiptUrl] = useState<string | null>(
     null,
@@ -42,6 +54,7 @@ export function RequestsTable({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+  const [isExportingCsv, setIsExportingCsv] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false);
@@ -93,7 +106,6 @@ export function RequestsTable({
           result.error || "Erro ao processar solicitações em lote",
         );
       } else {
-        // Remove processed PENDING IDs from selection
         setSelectedIds((prev) =>
           prev.filter((id) => !selectedPendingIds.includes(id)),
         );
@@ -102,6 +114,73 @@ export function RequestsTable({
       setErrorMessage(error instanceof Error ? error.message : String(error));
     } finally {
       setIsBatchProcessing(false);
+    }
+  };
+
+  const handleExportCsv = async () => {
+    if (selectedIds.length === 0) return;
+    setIsExportingCsv(true);
+    setErrorMessage(null);
+    try {
+      if (onExportCsv) {
+        await onExportCsv(selectedIds);
+      } else {
+        const result = await exportToCsvAction(selectedIds);
+        if (
+          result.success &&
+          result.csv &&
+          typeof URL.createObjectURL === "function"
+        ) {
+          const blob = new Blob([result.csv], {
+            type: "text/csv;charset=utf-8;",
+          });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.setAttribute(
+            "download",
+            `reembolsos_${new Date().toISOString().slice(0, 10)}.csv`,
+          );
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        } else if (!result.success) {
+          setErrorMessage(result.error || "Erro ao exportar CSV");
+        }
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsExportingCsv(false);
+    }
+  };
+
+  const handleConfirmBatch = async (
+    selectedReqs: RefundRequest[],
+    recipientEmail?: string,
+  ) => {
+    setErrorMessage(null);
+    try {
+      if (onConfirmBatch) {
+        await onConfirmBatch(selectedReqs, recipientEmail);
+      } else {
+        const result = await sendBatchPaymentEmailAction(
+          selectedReqs.map((r) => r.id),
+          recipientEmail,
+        );
+        if (result.success) {
+          const sentIds = selectedReqs.map((r) => r.id);
+          setSelectedIds((prev) => prev.filter((id) => !sentIds.includes(id)));
+        } else {
+          setErrorMessage(result.error || "Erro ao enviar pagamentos em lote");
+          throw new Error(result.error || "Erro ao enviar pagamentos em lote");
+        }
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      setErrorMessage(msg);
+      throw error;
     }
   };
 
@@ -132,6 +211,18 @@ export function RequestsTable({
           {selectedIds.length} selecionado(s)
         </span>
         <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={selectedIds.length === 0 || isExportingCsv}
+            onClick={handleExportCsv}
+          >
+            {isExportingCsv && (
+              <Loader2 className="size-4 animate-spin mr-1.5" />
+            )}
+            <Download className="size-4 mr-1.5" />
+            Exportar CSV
+          </Button>
           <Button
             type="button"
             disabled={selectedPendingIds.length === 0 || isBatchProcessing}
@@ -308,7 +399,7 @@ export function RequestsTable({
           isOpen={isBatchDialogOpen}
           onClose={() => setIsBatchDialogOpen(false)}
           selectedRequests={selectedApprovedRequests}
-          onConfirm={onConfirmBatch}
+          onConfirm={handleConfirmBatch}
         />
       </div>
     </div>
