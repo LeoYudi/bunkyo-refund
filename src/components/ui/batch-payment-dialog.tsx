@@ -14,7 +14,10 @@ export interface BatchPaymentDialogProps {
   isOpen: boolean;
   onClose: () => void;
   selectedRequests?: RefundRequest[];
-  onConfirm?: (selectedRequests: RefundRequest[]) => void | Promise<void>;
+  onConfirm?: (
+    selectedRequests: RefundRequest[],
+    recipientEmail?: string,
+  ) => void | Promise<void>;
 }
 
 export function BatchPaymentDialog({

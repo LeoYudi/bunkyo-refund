@@ -1,7 +1,16 @@
-import * as React from "react";
-import { Html, Head, Body, Container, Text } from "@react-email/components";
+import { Body, Container, Head, Html, Text } from "@react-email/components";
+import type { RefundRequest } from "@/models/refund.model";
 
-export function RefundBatchEmail({ date, totalValue }: { date: string, totalValue: number }) {
+export interface RefundBatchEmailProps {
+  date: string;
+  requests?: RefundRequest[];
+  totalValue?: number;
+}
+
+export function RefundBatchEmail({
+  date,
+  totalValue = 0,
+}: RefundBatchEmailProps) {
   return (
     <Html>
       <Head />

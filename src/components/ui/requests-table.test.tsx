@@ -4,12 +4,21 @@ import {
   processBatchReceiptsAction,
   processReceiptAction,
 } from "@/actions/ai.actions";
+import {
+  exportToCsvAction,
+  sendBatchPaymentEmailAction,
+} from "@/actions/batch.actions";
 import type { Database } from "@/models/database.types";
 import { RequestsTable } from "./requests-table";
 
 vi.mock("@/actions/ai.actions", () => ({
   processReceiptAction: vi.fn(),
   processBatchReceiptsAction: vi.fn(),
+}));
+
+vi.mock("@/actions/batch.actions", () => ({
+  sendBatchPaymentEmailAction: vi.fn(),
+  exportToCsvAction: vi.fn(),
 }));
 
 type RefundRequest = Database["public"]["Tables"]["refund_requests"]["Row"];
@@ -21,6 +30,14 @@ describe("RequestsTable", () => {
     vi.mocked(processBatchReceiptsAction).mockResolvedValue({
       success: true,
       data: { succeeded: [], failed: [] },
+    });
+    vi.mocked(sendBatchPaymentEmailAction).mockResolvedValue({
+      success: true,
+      data: [],
+    });
+    vi.mocked(exportToCsvAction).mockResolvedValue({
+      success: true,
+      csv: "\uFEFFID,Solicitante\nreq-1,Alice",
     });
   });
 
@@ -755,6 +772,68 @@ describe("RequestsTable", () => {
         screen.getByText(/2 solicitaç(ões|oes) selecionadas/i),
       ).toBeInTheDocument();
       expect(screen.getByText(/R\$\s*600,00/)).toBeInTheDocument();
+    });
+
+    it("should render 'Exportar CSV' button disabled initially, enable it when any request is selected, and call exportToCsvAction with selectedIds when clicked", () => {
+      render(<RequestsTable requests={bulkMockRequests} />);
+
+      const exportCsvButton = screen.getByRole("button", {
+        name: /exportar csv/i,
+      });
+      expect(exportCsvButton).toBeInTheDocument();
+      expect(exportCsvButton).toBeDisabled();
+
+      const allCheckboxes = screen.getAllByRole("checkbox");
+      const pendingCb = allCheckboxes[1];
+      const approved1Cb = allCheckboxes[2];
+
+      fireEvent.click(pendingCb);
+      expect(exportCsvButton).not.toBeDisabled();
+
+      fireEvent.click(approved1Cb);
+      fireEvent.click(exportCsvButton);
+
+      expect(exportToCsvAction).toHaveBeenCalledTimes(1);
+      expect(exportToCsvAction).toHaveBeenCalledWith([
+        "req-pending",
+        "req-approved-1",
+      ]);
+    });
+
+    it("should call sendBatchPaymentEmailAction with selected APPROVED request IDs and recipientEmail when confirming inside BatchPaymentDialog (without onConfirmBatch prop)", () => {
+      render(<RequestsTable requests={bulkMockRequests} />);
+
+      const allCheckboxes = screen.getAllByRole("checkbox");
+      const pendingCb = allCheckboxes[1];
+      const approved1Cb = allCheckboxes[2];
+      const approved2Cb = allCheckboxes[3];
+
+      fireEvent.click(pendingCb);
+      fireEvent.click(approved1Cb);
+      fireEvent.click(approved2Cb);
+
+      const batchPaymentButton = screen.getByRole("button", {
+        name: /enviar pagamentos em lote/i,
+      });
+      fireEvent.click(batchPaymentButton);
+
+      const emailInput = screen.getByPlaceholderText(
+        /e-mail|destinatário|financeiro/i,
+      );
+      fireEvent.change(emailInput, {
+        target: { value: "financeiro@bunkyo.org.br" },
+      });
+
+      const confirmButton = screen.getByRole("button", {
+        name: /confirmar envio/i,
+      });
+      fireEvent.click(confirmButton);
+
+      expect(sendBatchPaymentEmailAction).toHaveBeenCalledTimes(1);
+      expect(sendBatchPaymentEmailAction).toHaveBeenCalledWith(
+        ["req-approved-1", "req-approved-2"],
+        "financeiro@bunkyo.org.br",
+      );
     });
   });
 });

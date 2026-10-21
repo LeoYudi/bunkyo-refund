@@ -109,7 +109,7 @@ describe("BatchPaymentDialog", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("should call onConfirm with selectedRequests when 'Confirmar Envio' button is clicked", () => {
+  it("should call onConfirm with selectedRequests and empty recipientEmail when 'Confirmar Envio' button is clicked without filling email", () => {
     const onConfirm = vi.fn();
     render(
       <BatchPaymentDialog
@@ -120,8 +120,39 @@ describe("BatchPaymentDialog", () => {
       />,
     );
 
+    const emailInput = screen.getByPlaceholderText(
+      /e-mail|destinatário|financeiro/i,
+    );
+    expect(emailInput).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: /confirmar envio/i }));
     expect(onConfirm).toHaveBeenCalledTimes(1);
-    expect(onConfirm).toHaveBeenCalledWith(mockSelectedRequests);
+    expect(onConfirm).toHaveBeenCalledWith(mockSelectedRequests, "");
+  });
+
+  it("should render recipient email input and pass the typed email to onConfirm when 'Confirmar Envio' is clicked", () => {
+    const onConfirm = vi.fn();
+    render(
+      <BatchPaymentDialog
+        isOpen={true}
+        onClose={() => {}}
+        selectedRequests={mockSelectedRequests}
+        onConfirm={onConfirm}
+      />,
+    );
+
+    const emailInput = screen.getByPlaceholderText(
+      /e-mail|destinatário|financeiro/i,
+    );
+    fireEvent.change(emailInput, {
+      target: { value: "financeiro@bunkyo.org.br" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /confirmar envio/i }));
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onConfirm).toHaveBeenCalledWith(
+      mockSelectedRequests,
+      "financeiro@bunkyo.org.br",
+    );
   });
 });

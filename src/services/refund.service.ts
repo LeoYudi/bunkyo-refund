@@ -106,4 +106,15 @@ export class RefundService {
 
     return { succeeded, failed };
   }
+
+  async sendBatchPayment(
+    _requestIds: string[],
+    _recipientEmail?: string,
+  ): Promise<RefundRequest[]> {
+    throw new Error("Not implemented");
+  }
+
+  async exportRequestsToCsv(_requestIds: string[]): Promise<string> {
+    throw new Error("Not implemented");
+  }
 }

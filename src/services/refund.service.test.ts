@@ -6,6 +6,7 @@ import {
   type RefundRequest,
 } from "@/repositories/refund.repository";
 import { processReceiptWithAI } from "@/services/ai.service";
+import { sendBatchEmailWithGmail } from "@/services/email.service";
 import { RefundService } from "./refund.service";
 
 vi.mock("@/repositories/refund.repository", () => {
@@ -17,6 +18,12 @@ vi.mock("@/repositories/refund.repository", () => {
 vi.mock("@/services/ai.service", () => {
   return {
     processReceiptWithAI: vi.fn(),
+  };
+});
+
+vi.mock("@/services/email.service", () => {
+  return {
+    sendBatchEmailWithGmail: vi.fn(),
   };
 });
 
@@ -625,6 +632,150 @@ describe("RefundService", () => {
           },
         ],
       });
+    });
+  });
+
+  describe("sendBatchPayment", () => {
+    const mockApprovedReq1: RefundRequest = {
+      id: "req-1",
+      requester_name: "Alice Silva",
+      receipt_file_url: "https://example.com/receipts/doc1.pdf",
+      status: "APPROVED",
+      created_at: "2026-10-20T10:00:00Z",
+      updated_at: "2026-10-20T10:00:00Z",
+      reviewed_by: "admin-1",
+      issuer_name: "Restaurante Sabor",
+      issuer_cnpj: "12.345.678/0001-90",
+      receiver_cnpj: "98.765.432/0001-10",
+      total_value: 150.5,
+      issue_date: "2026-10-20",
+      issue_number: "NF-101",
+      description: "Almoço da equipe",
+    };
+
+    const mockApprovedReq2: RefundRequest = {
+      id: "req-2",
+      requester_name: "Bob Santos",
+      receipt_file_url: "https://example.com/receipts/doc2.pdf",
+      status: "APPROVED",
+      created_at: "2026-10-21T10:00:00Z",
+      updated_at: "2026-10-21T10:00:00Z",
+      reviewed_by: "admin-1",
+      issuer_name: "Táxi SP",
+      issuer_cnpj: null,
+      receiver_cnpj: null,
+      total_value: 249.5,
+      issue_date: "2026-10-21",
+      issue_number: null,
+      description: "Transporte evento",
+    };
+
+    it("should fetch requests by ID, send batch email via Gmail, and update status to SENT", async () => {
+      const service = new RefundService();
+
+      mockRepositoryInstance.findById.mockImplementation(async (id: string) => {
+        if (id === "req-1") return mockApprovedReq1;
+        if (id === "req-2") return mockApprovedReq2;
+        return null;
+      });
+
+      vi.mocked(sendBatchEmailWithGmail).mockResolvedValue({
+        messageId: "gmail-msg-123",
+      });
+
+      mockRepositoryInstance.updateStatus.mockImplementation(
+        async (id: string, status: RefundRequest["status"]) => {
+          const base = id === "req-1" ? mockApprovedReq1 : mockApprovedReq2;
+          return { ...base, status };
+        },
+      );
+
+      const result = await service.sendBatchPayment(
+        ["req-1", "req-2"],
+        "financeiro@bunkyo.org.br",
+      );
+
+      expect(mockRepositoryInstance.findById).toHaveBeenCalledWith("req-1");
+      expect(mockRepositoryInstance.findById).toHaveBeenCalledWith("req-2");
+      expect(sendBatchEmailWithGmail).toHaveBeenCalledWith({
+        requests: [mockApprovedReq1, mockApprovedReq2],
+        recipientEmail: "financeiro@bunkyo.org.br",
+        date: expect.any(String),
+      });
+      expect(mockRepositoryInstance.updateStatus).toHaveBeenCalledWith(
+        "req-1",
+        "SENT",
+      );
+      expect(mockRepositoryInstance.updateStatus).toHaveBeenCalledWith(
+        "req-2",
+        "SENT",
+      );
+      expect(result).toEqual([
+        { ...mockApprovedReq1, status: "SENT" },
+        { ...mockApprovedReq2, status: "SENT" },
+      ]);
+    });
+
+    it("should throw an error if requestIds is empty", async () => {
+      const service = new RefundService();
+
+      await expect(service.sendBatchPayment([])).rejects.toThrow(
+        /selecionad|vazio|solicitaç/i,
+      );
+      expect(sendBatchEmailWithGmail).not.toHaveBeenCalled();
+    });
+
+    it("should throw an error if any request is not found", async () => {
+      const service = new RefundService();
+
+      mockRepositoryInstance.findById.mockImplementation(async (id: string) => {
+        if (id === "req-1") return mockApprovedReq1;
+        return null;
+      });
+
+      await expect(
+        service.sendBatchPayment(["req-1", "non-existent"]),
+      ).rejects.toThrow(/não encontrad/i);
+      expect(sendBatchEmailWithGmail).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("exportRequestsToCsv", () => {
+    const mockReq1: RefundRequest = {
+      id: "req-1",
+      requester_name: "Alice Silva",
+      status: "APPROVED",
+      issuer_name: "Restaurante Sabor, Ltda",
+      issuer_cnpj: "12.345.678/0001-90",
+      receiver_cnpj: "98.765.432/0001-10",
+      issue_number: "NF-101",
+      issue_date: "2026-10-20",
+      total_value: 150.5,
+      description: 'Almoço "Executivo", equipe',
+      receipt_file_url: "https://example.com/receipts/doc1.pdf",
+      created_at: "2026-10-20T10:00:00Z",
+      updated_at: "2026-10-20T10:00:00Z",
+      reviewed_by: "admin-1",
+    };
+
+    it("should generate UTF-8 BOM CSV with header and properly escaped values", async () => {
+      const service = new RefundService();
+
+      mockRepositoryInstance.findById.mockResolvedValue(mockReq1);
+
+      const csv = await service.exportRequestsToCsv(["req-1"]);
+
+      expect(csv.startsWith("\uFEFF")).toBe(true);
+
+      const lines = csv.replace("\uFEFF", "").trim().split(/\r?\n/);
+      expect(lines[0]).toBe(
+        "ID,Solicitante,Status,Emissor,CNPJ Emissor,CNPJ Tomador,Nº Nota,Data Emissão,Valor Total,Descrição,URL Comprovante,Criado em",
+      );
+      expect(lines[1]).toContain("req-1");
+      expect(lines[1]).toContain("Alice Silva");
+      expect(lines[1]).toContain('"Restaurante Sabor, Ltda"');
+      expect(lines[1]).toContain('"Almoço ""Executivo"", equipe"');
+      expect(lines[1]).toContain("https://example.com/receipts/doc1.pdf");
     });
   });
 });

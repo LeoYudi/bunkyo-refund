@@ -24,7 +24,10 @@ export interface RequestsTableProps {
   requests: RefundRequest[];
   onProcessRequest?: (requestId: string) => Promise<void> | void;
   onProcessBatch?: (requestIds: string[]) => Promise<void> | void;
-  onConfirmBatch?: (selectedRequests: RefundRequest[]) => void | Promise<void>;
+  onConfirmBatch?: (
+    selectedRequests: RefundRequest[],
+    recipientEmail?: string,
+  ) => void | Promise<void>;
 }
 
 export function RequestsTable({
