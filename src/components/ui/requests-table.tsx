@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, Loader2 } from "lucide-react";
+import { CheckCircle, Eye, Loader2, MoreHorizontal } from "lucide-react";
 import { useState } from "react";
 import {
   processBatchReceiptsAction,
@@ -10,6 +10,12 @@ import { REFUND_STATUS_MAP, type RefundRequest } from "@/models/refund.model";
 import { Badge } from "./badge";
 import { BatchPaymentDialog } from "./batch-payment-dialog";
 import { Button } from "./button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./dropdown-menu";
 import { ReceiptModal } from "./receipt-modal";
 
 export type { RefundRequest };
@@ -175,9 +181,6 @@ export function RequestsTable({
                 Data
               </th>
               <th scope="col" className="px-6 py-3">
-                Anexo
-              </th>
-              <th scope="col" className="px-6 py-3">
                 Emissor
               </th>
               <th scope="col" className="px-6 py-3">
@@ -194,7 +197,7 @@ export function RequestsTable({
           <tbody>
             {requests.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                   Nenhuma solicitação encontrada.
                 </td>
               </tr>
@@ -204,6 +207,9 @@ export function RequestsTable({
                 const isSelectable =
                   req.status === "PENDING" || req.status === "APPROVED";
                 const isSelected = selectedIds.includes(req.id);
+                const hasReceipt = Boolean(req.receipt_file_url);
+                const canProcess = req.status === "PENDING";
+                const hasActions = hasReceipt || canProcess;
                 return (
                   <tr
                     key={req.id}
@@ -232,23 +238,6 @@ export function RequestsTable({
                     <td className="px-6 py-4">
                       {new Date(req.created_at).toLocaleDateString()}
                     </td>
-                    <td className="px-6 py-4">
-                      {req.receipt_file_url ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedReceiptUrl(req.receipt_file_url);
-                            setIsModalOpen(true);
-                          }}
-                          className="p-2 rounded-lg text-primary hover:text-primary/80 hover:bg-primary/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          aria-label="Ver anexo"
-                        >
-                          <Eye className="size-4" />
-                        </button>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </td>
                     <td className="px-6 py-4">{req.issuer_name || "-"}</td>
                     <td className="px-6 py-4">{req.issuer_cnpj || "-"}</td>
                     <td className="px-6 py-4">
@@ -260,21 +249,41 @@ export function RequestsTable({
                         : "-"}
                     </td>
                     <td className="px-6 py-4">
-                      {req.status === "PENDING" ? (
-                        <button
-                          type="button"
-                          disabled={processingId === req.id}
-                          onClick={() => handleProcess(req.id)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50"
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          disabled={!hasActions || processingId === req.id}
+                          aria-label={`Abrir menu de ações para ${req.requester_name}`}
+                          className="inline-flex items-center justify-center rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:pointer-events-none disabled:opacity-50"
                         >
-                          {processingId === req.id && (
-                            <Loader2 className="size-3.5 animate-spin" />
+                          {processingId === req.id ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <MoreHorizontal className="size-4" />
                           )}
-                          Aprovar para Leitura
-                        </button>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {hasReceipt && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedReceiptUrl(req.receipt_file_url);
+                                setIsModalOpen(true);
+                              }}
+                            >
+                              <Eye className="size-4" />
+                              Visualizar Nota Fiscal
+                            </DropdownMenuItem>
+                          )}
+                          {canProcess && (
+                            <DropdownMenuItem
+                              disabled={processingId === req.id}
+                              onClick={() => handleProcess(req.id)}
+                            >
+                              <CheckCircle className="size-4" />
+                              Aprovar para Leitura
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </td>
                   </tr>
                 );
