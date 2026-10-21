@@ -24,12 +24,16 @@ describe("RequestsTable", () => {
     });
   });
 
-  it("should render table headers correctly", () => {
+  it("should render table headers correctly without Anexo column", () => {
     render(<RequestsTable requests={[]} />);
     expect(screen.getByText("Nome")).toBeInTheDocument();
     expect(screen.getByText("Status")).toBeInTheDocument();
     expect(screen.getByText("Data")).toBeInTheDocument();
-    expect(screen.getByText("Anexo")).toBeInTheDocument();
+    expect(screen.getByText("Emissor")).toBeInTheDocument();
+    expect(screen.getByText("CNPJ")).toBeInTheDocument();
+    expect(screen.getByText("Valor Total")).toBeInTheDocument();
+    expect(screen.getByText("Ações")).toBeInTheDocument();
+    expect(screen.queryByText("Anexo")).not.toBeInTheDocument();
   });
 
   it("should render mock data correctly", () => {
@@ -77,7 +81,7 @@ describe("RequestsTable", () => {
     expect(screen.getByText("Aprovado")).toBeInTheDocument();
   });
 
-  describe("Anexo Column and ReceiptModal Integration", () => {
+  describe("Row Actions DropdownMenu and ReceiptModal Integration", () => {
     const mockRequests: RefundRequest[] = [
       {
         id: "1",
@@ -113,28 +117,36 @@ describe("RequestsTable", () => {
       },
     ];
 
-    it("should render a 'Ver Anexo' button only when receipt_file_url is present", () => {
+    it("should disable the 3-dots action menu button when an APPROVED row has no receipt_file_url", () => {
       render(<RequestsTable requests={mockRequests} />);
 
-      const buttons = screen.getAllByRole("button", { name: /ver anexo/i });
-      expect(buttons).toHaveLength(1);
+      const actionButtons = screen.getAllByRole("button", {
+        name: /abrir menu|ações/i,
+      });
+      expect(actionButtons).toHaveLength(2);
+      expect(actionButtons[0]).not.toBeDisabled();
+      expect(actionButtons[1]).toBeDisabled();
     });
 
-    it("should open ReceiptModal with the correct URL when the 'Ver Anexo' button is clicked", () => {
+    it("should open ReceiptModal with the correct URL when 'Visualizar Nota Fiscal' is clicked inside the 3-dots menu", () => {
       render(<RequestsTable requests={mockRequests} />);
 
-      const button = screen.getByRole("button", { name: /ver anexo/i });
+      const actionButtons = screen.getAllByRole("button", {
+        name: /abrir menu|ações/i,
+      });
 
-      // Modal should not be present initially (or at least hidden, but ReceiptModal returns null if !isOpen)
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
-      fireEvent.click(button);
+      fireEvent.click(actionButtons[0]);
 
-      // Modal should now be in the document
+      const viewReceiptOption = screen.getByRole("menuitem", {
+        name: /visualizar nota fiscal/i,
+      });
+      fireEvent.click(viewReceiptOption);
+
       const dialog = screen.getByRole("dialog");
       expect(dialog).toBeInTheDocument();
 
-      // Check if iframe is rendered with correct src for PDF
       const iframe = screen.getByTitle("Comprovante") as HTMLIFrameElement;
       expect(iframe).toBeInTheDocument();
       expect(iframe.src).toBe("http://example.com/alice.pdf");
@@ -250,11 +262,11 @@ describe("RequestsTable", () => {
       expect(screen.getByText("Ações")).toBeInTheDocument();
     });
 
-    it("should render empty state cell spanning all 9 columns when requests is empty", () => {
+    it("should render empty state cell spanning all 8 columns when requests is empty", () => {
       render(<RequestsTable requests={[]} />);
 
       const emptyCell = screen.getByText("Nenhuma solicitação encontrada.");
-      expect(emptyCell).toHaveAttribute("colspan", "9");
+      expect(emptyCell).toHaveAttribute("colspan", "8");
     });
 
     it("should display extracted data (issuer_name, issuer_cnpj, total_value in BRL currency) and '-' for null values", () => {
@@ -270,18 +282,40 @@ describe("RequestsTable", () => {
       expect(dashes.length).toBeGreaterThanOrEqual(15);
     });
 
-    it("should render 'Aprovar para Leitura' button only for requests with PENDING status", () => {
+    it("should show both 'Visualizar Nota Fiscal' and 'Aprovar para Leitura' in the 3-dots menu for a PENDING row with receipt_file_url", () => {
       render(<RequestsTable requests={mockDetailedRequests} />);
 
-      const approveButtons = screen.getAllByRole("button", {
-        name: /^aprovar para leitura$/i,
+      const actionButtons = screen.getAllByRole("button", {
+        name: /abrir menu|ações/i,
       });
+      fireEvent.click(actionButtons[0]);
 
-      // Only req-1 has status PENDING, while others are APPROVED, PROCESSING, DENIED, SENT, PAID
-      expect(approveButtons).toHaveLength(1);
+      expect(
+        screen.getByRole("menuitem", { name: /visualizar nota fiscal/i }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("menuitem", { name: /aprovar para leitura/i }),
+      ).toBeInTheDocument();
     });
 
-    it("should trigger onProcessRequest callback with request id when 'Aprovar para Leitura' is clicked", () => {
+    it("should show 'Visualizar Nota Fiscal' and NOT show 'Aprovar para Leitura' in the 3-dots menu for an APPROVED row with receipt_file_url", () => {
+      render(<RequestsTable requests={mockDetailedRequests} />);
+
+      const actionButtons = screen.getAllByRole("button", {
+        name: /abrir menu|ações/i,
+      });
+      // Index 1 is Bob Santos (APPROVED with receipt_file_url)
+      fireEvent.click(actionButtons[1]);
+
+      expect(
+        screen.getByRole("menuitem", { name: /visualizar nota fiscal/i }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("menuitem", { name: /aprovar para leitura/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("should trigger onProcessRequest callback with request id when 'Aprovar para Leitura' menuitem is clicked", () => {
       const onProcessRequestMock = vi.fn();
 
       render(
@@ -291,22 +325,32 @@ describe("RequestsTable", () => {
         />,
       );
 
-      const approveButton = screen.getByRole("button", {
-        name: /^aprovar para leitura$/i,
+      const actionButtons = screen.getAllByRole("button", {
+        name: /abrir menu|ações/i,
       });
-      fireEvent.click(approveButton);
+      fireEvent.click(actionButtons[0]);
+
+      const approveItem = screen.getByRole("menuitem", {
+        name: /aprovar para leitura/i,
+      });
+      fireEvent.click(approveItem);
 
       expect(onProcessRequestMock).toHaveBeenCalledTimes(1);
       expect(onProcessRequestMock).toHaveBeenCalledWith("req-1");
     });
 
-    it("should call default processReceiptAction with request id when 'Aprovar para Leitura' is clicked and onProcessRequest is not provided", () => {
+    it("should call default processReceiptAction with request id when 'Aprovar para Leitura' menuitem is clicked and onProcessRequest is not provided", () => {
       render(<RequestsTable requests={mockDetailedRequests} />);
 
-      const approveButton = screen.getByRole("button", {
-        name: /^aprovar para leitura$/i,
+      const actionButtons = screen.getAllByRole("button", {
+        name: /abrir menu|ações/i,
       });
-      fireEvent.click(approveButton);
+      fireEvent.click(actionButtons[0]);
+
+      const approveItem = screen.getByRole("menuitem", {
+        name: /aprovar para leitura/i,
+      });
+      fireEvent.click(approveItem);
 
       expect(processReceiptAction).toHaveBeenCalledTimes(1);
       expect(processReceiptAction).toHaveBeenCalledWith("req-1");
@@ -320,10 +364,15 @@ describe("RequestsTable", () => {
 
       render(<RequestsTable requests={mockDetailedRequests} />);
 
-      const approveButton = screen.getByRole("button", {
-        name: /^aprovar para leitura$/i,
+      const actionButtons = screen.getAllByRole("button", {
+        name: /abrir menu|ações/i,
       });
-      fireEvent.click(approveButton);
+      fireEvent.click(actionButtons[0]);
+
+      const approveItem = screen.getByRole("menuitem", {
+        name: /aprovar para leitura/i,
+      });
+      fireEvent.click(approveItem);
 
       const alert = await screen.findByRole("alert");
       expect(alert).toBeInTheDocument();
