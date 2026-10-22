@@ -167,17 +167,19 @@ export function RequestsTable({
     recipientEmail?: string,
     cc?: string,
     bcc?: string,
+    metadata?: BatchEmailMetadata,
   ) => {
     setErrorMessage(null);
     try {
       if (onConfirmBatch) {
-        await onConfirmBatch(selectedReqs, recipientEmail, cc, bcc);
+        await onConfirmBatch(selectedReqs, recipientEmail, cc, bcc, metadata);
       } else {
         const result = await sendBatchPaymentEmailAction(
           selectedReqs.map((r) => r.id),
           recipientEmail,
           cc,
           bcc,
+          metadata,
         );
         if (result.success) {
           const sentIds = selectedReqs.map((r) => r.id);

@@ -116,7 +116,7 @@ export class RefundService {
     recipientEmail?: string,
     cc?: string,
     bcc?: string,
-    _metadata?: BatchEmailMetadata,
+    metadata?: BatchEmailMetadata,
   ): Promise<RefundRequest[]> {
     if (!requestIds || requestIds.length === 0) {
       throw new Error("Nenhuma solicitação selecionada");
@@ -137,6 +137,7 @@ export class RefundService {
       ...(cc !== undefined ? { cc } : {}),
       ...(bcc !== undefined ? { bcc } : {}),
       date: new Date().toLocaleDateString("pt-BR"),
+      ...metadata,
     });
 
     const updatedRequests: RefundRequest[] = [];

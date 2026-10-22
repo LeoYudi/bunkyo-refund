@@ -2,8 +2,6 @@ import {
   Body,
   Container,
   Head,
-  Heading,
-  Hr,
   Html,
   Link,
   Section,
@@ -28,17 +26,47 @@ export function RefundBatchEmail({
   date,
   requests = [],
   totalValue,
+  eventDescription,
+  approverEmail,
+  pixByRequester,
+  senderName,
+  senderRole,
+  senderEmail,
+  senderPhone,
 }: RefundBatchEmailProps) {
   const computedTotal =
     totalValue ??
     requests.reduce((acc, req) => acc + (req.total_value ?? 0), 0);
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(val);
-  };
+  const currencyFormatter = new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+
+  // Group requests by requester_name keeping order of appearance
+  const groups: Array<{ name: string; total: number; pix: string }> = [];
+  for (const req of requests) {
+    const name = req.requester_name;
+    const val = req.total_value ?? 0;
+    const existing = groups.find((g) => g.name === name);
+    if (existing) {
+      existing.total += val;
+    } else {
+      const pix = pixByRequester?.[name] || "-";
+      groups.push({ name, total: val, pix });
+    }
+  }
+
+  const rawDesc = eventDescription?.trim() || `gastos do lote de ${date}`;
+  const cleanDesc = rawDesc.replace(/^aos\s+/i, "");
+
+  const resolvedApprover = approverEmail?.trim() || "jaque.hanaoka@gmail.com";
+  const resolvedSenderName = senderName?.trim() || "Lucas Tamanaha";
+  const resolvedSenderRole =
+    senderRole?.trim() ||
+    "Diretor Financeiro da Comissão de Jovens do Bunkyo - Gestão 2026";
+  const resolvedSenderEmail = senderEmail?.trim() || "jovens@bunkyo.org.br";
+  const resolvedSenderPhone = senderPhone?.trim() || "(16) 99332-8607";
 
   return (
     <Html>
@@ -57,74 +85,121 @@ export function RefundBatchEmail({
             borderRadius: "5px",
           }}
         >
-          <Heading
-            as="h1"
-            style={{ fontSize: "20px", color: "#333", marginBottom: "20px" }}
-          >
-            Pedido de Reembolsos - {date}
-          </Heading>
+          <Text>Pessoal, bom dia.</Text>
+          <Text>
+            Gostaria de solicitar o reembolso referente aos {cleanDesc}.
+          </Text>
+          <Text>
+            A planilha compartilhada "Solicitação de Reembolso de Despesas" foi
+            preenchida com os valores e informações das notas que competem ao
+            evento.
+          </Text>
+
           <Section>
             <table
               style={{
-                width: "100%",
                 borderCollapse: "collapse",
-                marginBottom: "20px",
+                marginTop: "16px",
+                marginBottom: "4px",
+                width: "100%",
               }}
             >
               <thead>
-                <tr
-                  style={{
-                    borderBottom: "1px solid #eaeaea",
-                    textAlign: "left",
-                  }}
-                >
-                  <th style={{ padding: "10px" }}>Colaborador</th>
-                  <th style={{ padding: "10px" }}>Valor</th>
-                  <th style={{ padding: "10px" }}>CNPJ</th>
-                  <th style={{ padding: "10px" }}>Link do Comprovante</th>
+                <tr style={{ backgroundColor: "#d9d9d9" }}>
+                  <th
+                    style={{
+                      border: "1px solid #000000",
+                      padding: "8px",
+                      textAlign: "center",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    Pessoa
+                  </th>
+                  <th
+                    style={{
+                      border: "1px solid #000000",
+                      padding: "8px",
+                      textAlign: "center",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    PIX
+                  </th>
+                  <th
+                    style={{
+                      border: "1px solid #000000",
+                      padding: "8px",
+                      textAlign: "center",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    Valor
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {requests.map((req) => (
-                  <tr
-                    key={req.id}
-                    style={{ borderBottom: "1px solid #f0f0f0" }}
-                  >
-                    <td style={{ padding: "10px" }}>{req.requester_name}</td>
-                    <td style={{ padding: "10px" }}>
-                      {formatCurrency(req.total_value ?? 0)}
+                {groups.map((group) => (
+                  <tr key={group.name}>
+                    <td
+                      style={{
+                        border: "1px solid #000000",
+                        padding: "8px",
+                      }}
+                    >
+                      {group.name}
                     </td>
-                    <td style={{ padding: "10px" }}>
-                      {req.issuer_cnpj || "-"}
+                    <td
+                      style={{
+                        border: "1px solid #000000",
+                        padding: "8px",
+                      }}
+                    >
+                      {group.pix}
                     </td>
-                    <td style={{ padding: "10px" }}>
-                      {req.receipt_file_url ? (
-                        <Link
-                          href={req.receipt_file_url}
-                          style={{
-                            color: "#007bff",
-                            textDecoration: "underline",
-                          }}
-                        >
-                          Ver Comprovante
-                        </Link>
-                      ) : (
-                        "-"
-                      )}
+                    <td
+                      style={{
+                        border: "1px solid #000000",
+                        padding: "8px",
+                      }}
+                    >
+                      {currencyFormatter.format(group.total)}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </Section>
-          <Hr style={{ borderColor: "#eaea", margin: "20px 0" }} />
-          <Section>
-            <Text
-              style={{ fontSize: "16px", fontWeight: "bold", color: "#333" }}
+
+          <Text style={{ fontWeight: "bold" }}>
+            Valor total {currencyFormatter.format(computedTotal)}
+          </Text>
+
+          <Text>
+            <Link
+              href={`mailto:${resolvedApprover}`}
+              style={{ color: "#1155cc" }}
             >
-              Valor Total Geral: {formatCurrency(computedTotal)}
-            </Text>
-          </Section>
+              @{resolvedApprover}
+            </Link>
+            <span>
+              . Por gentileza, poderia revisar e aprovar esta solicitação?
+            </span>
+          </Text>
+
+          <Text>Atenciosamente,</Text>
+          <Text style={{ color: "#cc0000", fontWeight: "bold", margin: "0" }}>
+            {resolvedSenderName}
+          </Text>
+          <Text style={{ fontWeight: "bold", margin: "0" }}>
+            {resolvedSenderRole}
+          </Text>
+          <Text style={{ color: "#cc0000", margin: "0" }}>
+            {resolvedSenderEmail}
+          </Text>
+          <Text style={{ color: "#cc0000", fontWeight: "bold", margin: "0" }}>
+            {resolvedSenderPhone}
+          </Text>
         </Container>
       </Body>
     </Html>

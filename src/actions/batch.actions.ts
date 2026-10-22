@@ -10,7 +10,7 @@ export async function sendBatchPaymentEmailAction(
   recipientEmail?: string,
   cc?: string,
   bcc?: string,
-  _metadata?: BatchEmailMetadata,
+  metadata?: BatchEmailMetadata,
 ): Promise<{
   success: boolean;
   data?: RefundRequest[];
@@ -22,15 +22,13 @@ export async function sendBatchPaymentEmailAction(
 
   try {
     const refundService = new RefundService();
-    const data =
-      cc !== undefined || bcc !== undefined
-        ? await refundService.sendBatchPayment(
-            requestIds,
-            recipientEmail,
-            cc,
-            bcc,
-          )
-        : await refundService.sendBatchPayment(requestIds, recipientEmail);
+    const data = await refundService.sendBatchPayment(
+      requestIds,
+      recipientEmail,
+      cc,
+      bcc,
+      metadata,
+    );
     revalidatePath("/admin");
     return { success: true, data };
   } catch (error) {
