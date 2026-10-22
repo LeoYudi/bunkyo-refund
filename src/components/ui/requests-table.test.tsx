@@ -1,15 +1,24 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   processBatchReceiptsAction,
   processReceiptAction,
 } from "@/actions/ai.actions";
+import {
+  exportToCsvAction,
+  sendBatchPaymentEmailAction,
+} from "@/actions/batch.actions";
 import type { Database } from "@/models/database.types";
 import { RequestsTable } from "./requests-table";
 
 vi.mock("@/actions/ai.actions", () => ({
   processReceiptAction: vi.fn(),
   processBatchReceiptsAction: vi.fn(),
+}));
+
+vi.mock("@/actions/batch.actions", () => ({
+  sendBatchPaymentEmailAction: vi.fn(),
+  exportToCsvAction: vi.fn(),
 }));
 
 type RefundRequest = Database["public"]["Tables"]["refund_requests"]["Row"];
@@ -21,6 +30,14 @@ describe("RequestsTable", () => {
     vi.mocked(processBatchReceiptsAction).mockResolvedValue({
       success: true,
       data: { succeeded: [], failed: [] },
+    });
+    vi.mocked(sendBatchPaymentEmailAction).mockResolvedValue({
+      success: true,
+      data: [],
+    });
+    vi.mocked(exportToCsvAction).mockResolvedValue({
+      success: true,
+      csv: "\uFEFFID,Solicitante\nreq-1,Alice",
     });
   });
 
@@ -315,7 +332,7 @@ describe("RequestsTable", () => {
       ).not.toBeInTheDocument();
     });
 
-    it("should trigger onProcessRequest callback with request id when 'Aprovar para Leitura' menuitem is clicked", () => {
+    it("should trigger onProcessRequest callback with request id when 'Aprovar para Leitura' menuitem is clicked", async () => {
       const onProcessRequestMock = vi.fn();
 
       render(
@@ -333,13 +350,15 @@ describe("RequestsTable", () => {
       const approveItem = screen.getByRole("menuitem", {
         name: /aprovar para leitura/i,
       });
-      fireEvent.click(approveItem);
+      await act(async () => {
+        fireEvent.click(approveItem);
+      });
 
       expect(onProcessRequestMock).toHaveBeenCalledTimes(1);
       expect(onProcessRequestMock).toHaveBeenCalledWith("req-1");
     });
 
-    it("should call default processReceiptAction with request id when 'Aprovar para Leitura' menuitem is clicked and onProcessRequest is not provided", () => {
+    it("should call default processReceiptAction with request id when 'Aprovar para Leitura' menuitem is clicked and onProcessRequest is not provided", async () => {
       render(<RequestsTable requests={mockDetailedRequests} />);
 
       const actionButtons = screen.getAllByRole("button", {
@@ -350,7 +369,9 @@ describe("RequestsTable", () => {
       const approveItem = screen.getByRole("menuitem", {
         name: /aprovar para leitura/i,
       });
-      fireEvent.click(approveItem);
+      await act(async () => {
+        fireEvent.click(approveItem);
+      });
 
       expect(processReceiptAction).toHaveBeenCalledTimes(1);
       expect(processReceiptAction).toHaveBeenCalledWith("req-1");
@@ -709,7 +730,7 @@ describe("RequestsTable", () => {
       expect(batchApproveButton).toBeDisabled();
     });
 
-    it("should call processBatchReceiptsAction with only selected PENDING request IDs when both PENDING and APPROVED rows are selected and 'Aprovar para Leitura em Lote' is clicked", () => {
+    it("should call processBatchReceiptsAction with only selected PENDING request IDs when both PENDING and APPROVED rows are selected and 'Aprovar para Leitura em Lote' is clicked", async () => {
       render(<RequestsTable requests={bulkMockRequests} />);
 
       const allCheckboxes = screen.getAllByRole("checkbox");
@@ -724,7 +745,9 @@ describe("RequestsTable", () => {
       const batchApproveButton = screen.getByRole("button", {
         name: /aprovar para leitura em lote/i,
       });
-      fireEvent.click(batchApproveButton);
+      await act(async () => {
+        fireEvent.click(batchApproveButton);
+      });
 
       expect(processBatchReceiptsAction).toHaveBeenCalledTimes(1);
       expect(processBatchReceiptsAction).toHaveBeenCalledWith(["req-pending"]);
@@ -755,6 +778,83 @@ describe("RequestsTable", () => {
         screen.getByText(/2 solicitaç(ões|oes) selecionadas/i),
       ).toBeInTheDocument();
       expect(screen.getByText(/R\$\s*600,00/)).toBeInTheDocument();
+    });
+
+    it("should render 'Exportar CSV' button disabled initially, enable it when any request is selected, and call exportToCsvAction with selectedIds when clicked", async () => {
+      render(<RequestsTable requests={bulkMockRequests} />);
+
+      const exportCsvButton = screen.getByRole("button", {
+        name: /exportar csv/i,
+      });
+      expect(exportCsvButton).toBeInTheDocument();
+      expect(exportCsvButton).toBeDisabled();
+
+      const allCheckboxes = screen.getAllByRole("checkbox");
+      const pendingCb = allCheckboxes[1];
+      const approved1Cb = allCheckboxes[2];
+
+      fireEvent.click(pendingCb);
+      expect(exportCsvButton).not.toBeDisabled();
+
+      fireEvent.click(approved1Cb);
+      await act(async () => {
+        fireEvent.click(exportCsvButton);
+      });
+
+      expect(exportToCsvAction).toHaveBeenCalledTimes(1);
+      expect(exportToCsvAction).toHaveBeenCalledWith([
+        "req-pending",
+        "req-approved-1",
+      ]);
+    });
+
+    it("should call sendBatchPaymentEmailAction with selected APPROVED request IDs, recipientEmail, cc, and bcc when confirming inside BatchPaymentDialog (without onConfirmBatch prop)", async () => {
+      render(<RequestsTable requests={bulkMockRequests} />);
+
+      const allCheckboxes = screen.getAllByRole("checkbox");
+      const pendingCb = allCheckboxes[1];
+      const approved1Cb = allCheckboxes[2];
+      const approved2Cb = allCheckboxes[3];
+
+      fireEvent.click(pendingCb);
+      fireEvent.click(approved1Cb);
+      fireEvent.click(approved2Cb);
+
+      const batchPaymentButton = screen.getByRole("button", {
+        name: /enviar pagamentos em lote/i,
+      });
+      fireEvent.click(batchPaymentButton);
+
+      const emailInput = screen.getByPlaceholderText(
+        /e-mail|destinatário|financeiro/i,
+      );
+      const ccInput = screen.getByLabelText(/Cc \(Cópia\)/i);
+      const bccInput = screen.getByLabelText(/Cco \(Cópia Oculta\)/i);
+
+      fireEvent.change(emailInput, {
+        target: { value: "financeiro@bunkyo.org.br" },
+      });
+      fireEvent.change(ccInput, {
+        target: { value: "cc@bunkyo.org.br" },
+      });
+      fireEvent.change(bccInput, {
+        target: { value: "bcc@bunkyo.org.br" },
+      });
+
+      const confirmButton = screen.getByRole("button", {
+        name: /confirmar envio/i,
+      });
+      await act(async () => {
+        fireEvent.click(confirmButton);
+      });
+
+      expect(sendBatchPaymentEmailAction).toHaveBeenCalledTimes(1);
+      expect(sendBatchPaymentEmailAction).toHaveBeenCalledWith(
+        ["req-approved-1", "req-approved-2"],
+        "financeiro@bunkyo.org.br",
+        "cc@bunkyo.org.br",
+        "bcc@bunkyo.org.br",
+      );
     });
   });
 });
