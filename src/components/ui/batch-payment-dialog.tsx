@@ -1,5 +1,6 @@
 import React from "react";
 import type { RefundRequest } from "@/models/refund.model";
+import type { BatchEmailMetadata } from "@/services/email.service";
 import { Button } from "./button";
 import {
   Dialog,
@@ -12,6 +13,8 @@ import {
 import { Input } from "./input";
 import { Label } from "./label";
 
+export type { BatchEmailMetadata };
+
 export interface BatchPaymentDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -21,6 +24,7 @@ export interface BatchPaymentDialogProps {
     recipientEmail?: string,
     cc?: string,
     bcc?: string,
+    metadata?: BatchEmailMetadata,
   ) => void | Promise<void>;
 }
 

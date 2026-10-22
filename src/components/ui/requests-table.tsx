@@ -18,7 +18,10 @@ import {
 } from "@/actions/batch.actions";
 import { REFUND_STATUS_MAP, type RefundRequest } from "@/models/refund.model";
 import { Badge } from "./badge";
-import { BatchPaymentDialog } from "./batch-payment-dialog";
+import {
+  type BatchEmailMetadata,
+  BatchPaymentDialog,
+} from "./batch-payment-dialog";
 import { Button } from "./button";
 import {
   DropdownMenu,
@@ -39,6 +42,7 @@ export interface RequestsTableProps {
     recipientEmail?: string,
     cc?: string,
     bcc?: string,
+    metadata?: BatchEmailMetadata,
   ) => void | Promise<void>;
   onExportCsv?: (requestIds: string[]) => Promise<void> | void;
 }

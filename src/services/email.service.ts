@@ -3,7 +3,18 @@ import { RefundBatchEmail } from "@/components/emails/refund-batch-email";
 import { createClient } from "@/lib/supabase/server";
 import type { RefundRequest } from "@/models/refund.model";
 
-export interface SendBatchEmailParams {
+export interface BatchEmailMetadata {
+  subject?: string;
+  eventDescription?: string;
+  approverEmail?: string;
+  pixByRequester?: Record<string, string>;
+  senderName?: string;
+  senderRole?: string;
+  senderEmail?: string;
+  senderPhone?: string;
+}
+
+export interface SendBatchEmailParams extends BatchEmailMetadata {
   requests: RefundRequest[];
   recipientEmail?: string;
   cc?: string;

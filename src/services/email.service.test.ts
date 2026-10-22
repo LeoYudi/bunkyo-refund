@@ -107,7 +107,38 @@ describe("email.service - sendBatchEmailWithGmail", () => {
     expect(decodedMime).not.toContain("Cc:");
     expect(decodedMime).not.toContain("Bcc:");
 
+    const expectedDefaultSubject = Buffer.from(
+      "Reembolso CJB - 21/10/2026",
+    ).toString("base64");
+    expect(decodedMime).toContain(
+      `Subject: =?UTF-8?B?${expectedDefaultSubject}?=\r\n`,
+    );
+
     expect(result).toEqual({ messageId: "gmail-msg-123" });
+  });
+
+  it("should encode custom subject in the MIME Subject header when subject is provided", async () => {
+    await sendBatchEmailWithGmail({
+      requests: mockRequests,
+      recipientEmail: "financeiro@bunkyo.org.br",
+      date: "21/10/2026",
+      subject: "Reembolso CJB - DFI 2026",
+    });
+
+    const fetchCallArgs = vi.mocked(global.fetch).mock.calls[0];
+    const parsedBody = JSON.parse(fetchCallArgs[1]?.body as string) as {
+      raw: string;
+    };
+    const decodedMime = Buffer.from(parsedBody.raw, "base64url").toString(
+      "utf-8",
+    );
+
+    const expectedCustomSubject = Buffer.from(
+      "Reembolso CJB - DFI 2026",
+    ).toString("base64");
+    expect(decodedMime).toContain(
+      `Subject: =?UTF-8?B?${expectedCustomSubject}?=\r\n`,
+    );
   });
 
   it("should include Cc and Bcc headers in the raw MIME message when cc and bcc are provided", async () => {

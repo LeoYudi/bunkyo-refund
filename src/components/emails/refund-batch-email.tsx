@@ -15,6 +15,13 @@ export interface RefundBatchEmailProps {
   date: string;
   requests?: RefundRequest[];
   totalValue?: number;
+  eventDescription?: string;
+  approverEmail?: string;
+  pixByRequester?: Record<string, string>;
+  senderName?: string;
+  senderRole?: string;
+  senderEmail?: string;
+  senderPhone?: string;
 }
 
 export function RefundBatchEmail({

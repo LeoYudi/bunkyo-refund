@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type { RefundRequest } from "@/models/refund.model";
+import type { BatchEmailMetadata } from "@/services/email.service";
 import { RefundService } from "@/services/refund.service";
 
 export async function sendBatchPaymentEmailAction(
@@ -9,6 +10,7 @@ export async function sendBatchPaymentEmailAction(
   recipientEmail?: string,
   cc?: string,
   bcc?: string,
+  _metadata?: BatchEmailMetadata,
 ): Promise<{
   success: boolean;
   data?: RefundRequest[];
