@@ -22,13 +22,23 @@ export async function sendBatchPaymentEmailAction(
 
   try {
     const refundService = new RefundService();
-    const data = await refundService.sendBatchPayment(
-      requestIds,
-      recipientEmail,
-      cc,
-      bcc,
-      metadata,
-    );
+    const data =
+      metadata !== undefined
+        ? await refundService.sendBatchPayment(
+            requestIds,
+            recipientEmail,
+            cc,
+            bcc,
+            metadata,
+          )
+        : cc !== undefined || bcc !== undefined
+          ? await refundService.sendBatchPayment(
+              requestIds,
+              recipientEmail,
+              cc,
+              bcc,
+            )
+          : await refundService.sendBatchPayment(requestIds, recipientEmail);
     revalidatePath("/admin");
     return { success: true, data };
   } catch (error) {

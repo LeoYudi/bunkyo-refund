@@ -212,7 +212,7 @@ export function BatchPaymentDialog({
                   </Label>
                   <Input
                     id={`pix-${group.requesterName}`}
-                    placeholder="Chave PIX (CPF, e-mail, celular...)"
+                    placeholder="Chave PIX (CPF, CNPJ, celular, aleatória)"
                     value={pixByRequester[group.requesterName] ?? ""}
                     onChange={(e) =>
                       setPixByRequester((prev) => ({
