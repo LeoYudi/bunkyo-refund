@@ -111,8 +111,8 @@ export class RefundService {
   async sendBatchPayment(
     requestIds: string[],
     recipientEmail?: string,
-    _cc?: string,
-    _bcc?: string,
+    cc?: string,
+    bcc?: string,
   ): Promise<RefundRequest[]> {
     if (!requestIds || requestIds.length === 0) {
       throw new Error("Nenhuma solicitação selecionada");
@@ -130,6 +130,8 @@ export class RefundService {
     await sendBatchEmailWithGmail({
       requests,
       recipientEmail,
+      ...(cc !== undefined ? { cc } : {}),
+      ...(bcc !== undefined ? { bcc } : {}),
       date: new Date().toLocaleDateString("pt-BR"),
     });
 

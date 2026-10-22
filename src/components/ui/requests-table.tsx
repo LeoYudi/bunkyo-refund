@@ -161,17 +161,19 @@ export function RequestsTable({
   const handleConfirmBatch = async (
     selectedReqs: RefundRequest[],
     recipientEmail?: string,
-    _cc?: string,
-    _bcc?: string,
+    cc?: string,
+    bcc?: string,
   ) => {
     setErrorMessage(null);
     try {
       if (onConfirmBatch) {
-        await onConfirmBatch(selectedReqs, recipientEmail);
+        await onConfirmBatch(selectedReqs, recipientEmail, cc, bcc);
       } else {
         const result = await sendBatchPaymentEmailAction(
           selectedReqs.map((r) => r.id),
           recipientEmail,
+          cc,
+          bcc,
         );
         if (result.success) {
           const sentIds = selectedReqs.map((r) => r.id);

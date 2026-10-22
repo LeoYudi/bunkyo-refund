@@ -18,6 +18,8 @@ export interface SendBatchEmailResult {
 export async function sendBatchEmailWithGmail({
   requests,
   recipientEmail,
+  cc,
+  bcc,
   date,
 }: SendBatchEmailParams): Promise<SendBatchEmailResult> {
   const supabase = await createClient();
@@ -76,6 +78,12 @@ export async function sendBatchEmailWithGmail({
   let mimeMessage = "";
   mimeMessage += `From: ${senderEmail ?? "me"}\r\n`;
   mimeMessage += `To: ${to}\r\n`;
+  if (cc?.trim()) {
+    mimeMessage += `Cc: ${cc.trim()}\r\n`;
+  }
+  if (bcc?.trim()) {
+    mimeMessage += `Bcc: ${bcc.trim()}\r\n`;
+  }
   const subjectEncoded = Buffer.from(`Pedido de Reembolsos - ${date}`).toString(
     "base64",
   );

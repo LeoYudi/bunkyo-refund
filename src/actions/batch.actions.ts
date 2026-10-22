@@ -7,8 +7,8 @@ import { RefundService } from "@/services/refund.service";
 export async function sendBatchPaymentEmailAction(
   requestIds: string[],
   recipientEmail?: string,
-  _cc?: string,
-  _bcc?: string,
+  cc?: string,
+  bcc?: string,
 ): Promise<{
   success: boolean;
   data?: RefundRequest[];
@@ -20,10 +20,15 @@ export async function sendBatchPaymentEmailAction(
 
   try {
     const refundService = new RefundService();
-    const data = await refundService.sendBatchPayment(
-      requestIds,
-      recipientEmail,
-    );
+    const data =
+      cc !== undefined || bcc !== undefined
+        ? await refundService.sendBatchPayment(
+            requestIds,
+            recipientEmail,
+            cc,
+            bcc,
+          )
+        : await refundService.sendBatchPayment(requestIds, recipientEmail);
     revalidatePath("/admin");
     return { success: true, data };
   } catch (error) {

@@ -32,6 +32,8 @@ export function BatchPaymentDialog({
 }: BatchPaymentDialogProps) {
   const [isConfirming, setIsConfirming] = React.useState(false);
   const [recipientEmail, setRecipientEmail] = React.useState("");
+  const [ccEmail, setCcEmail] = React.useState("");
+  const [bccEmail, setBccEmail] = React.useState("");
 
   const totalSum = selectedRequests.reduce(
     (acc, req) => acc + (req.total_value ?? 0),
@@ -50,7 +52,7 @@ export function BatchPaymentDialog({
     }
     try {
       setIsConfirming(true);
-      await onConfirm(selectedRequests, recipientEmail);
+      await onConfirm(selectedRequests, recipientEmail, ccEmail, bccEmail);
       onClose();
     } finally {
       setIsConfirming(false);
@@ -82,6 +84,28 @@ export function BatchPaymentDialog({
               placeholder="E-mail do destinatário (financeiro@bunkyo.org.br)"
               value={recipientEmail}
               onChange={(e) => setRecipientEmail(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="cc-email">Cc (Cópia)</Label>
+            <Input
+              id="cc-email"
+              type="text"
+              placeholder="Ex: gestor@bunkyo.org.br, fiscal@bunkyo.org.br"
+              value={ccEmail}
+              onChange={(e) => setCcEmail(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="bcc-email">Cco (Cópia Oculta)</Label>
+            <Input
+              id="bcc-email"
+              type="text"
+              placeholder="Ex: diretoria@bunkyo.org.br"
+              value={bccEmail}
+              onChange={(e) => setBccEmail(e.target.value)}
             />
           </div>
 
