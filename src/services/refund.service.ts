@@ -4,7 +4,10 @@ import type { Database } from "@/models/database.types";
 import type { CreateRefundSchema, RefundRequest } from "@/models/refund.model";
 import { RefundRepository } from "@/repositories/refund.repository";
 import { processReceiptWithAI } from "@/services/ai.service";
-import { sendBatchEmailWithGmail } from "@/services/email.service";
+import {
+  type BatchEmailMetadata,
+  sendBatchEmailWithGmail,
+} from "@/services/email.service";
 
 export class RefundService {
   private repository: RefundRepository;
@@ -113,6 +116,7 @@ export class RefundService {
     recipientEmail?: string,
     cc?: string,
     bcc?: string,
+    metadata?: BatchEmailMetadata,
   ): Promise<RefundRequest[]> {
     if (!requestIds || requestIds.length === 0) {
       throw new Error("Nenhuma solicitação selecionada");
@@ -133,6 +137,7 @@ export class RefundService {
       ...(cc !== undefined ? { cc } : {}),
       ...(bcc !== undefined ? { bcc } : {}),
       date: new Date().toLocaleDateString("pt-BR"),
+      ...metadata,
     });
 
     const updatedRequests: RefundRequest[] = [];

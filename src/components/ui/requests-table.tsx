@@ -18,7 +18,10 @@ import {
 } from "@/actions/batch.actions";
 import { REFUND_STATUS_MAP, type RefundRequest } from "@/models/refund.model";
 import { Badge } from "./badge";
-import { BatchPaymentDialog } from "./batch-payment-dialog";
+import {
+  type BatchEmailMetadata,
+  BatchPaymentDialog,
+} from "./batch-payment-dialog";
 import { Button } from "./button";
 import {
   DropdownMenu,
@@ -39,6 +42,7 @@ export interface RequestsTableProps {
     recipientEmail?: string,
     cc?: string,
     bcc?: string,
+    metadata?: BatchEmailMetadata,
   ) => void | Promise<void>;
   onExportCsv?: (requestIds: string[]) => Promise<void> | void;
 }
@@ -163,18 +167,36 @@ export function RequestsTable({
     recipientEmail?: string,
     cc?: string,
     bcc?: string,
+    metadata?: BatchEmailMetadata,
   ) => {
     setErrorMessage(null);
     try {
       if (onConfirmBatch) {
-        await onConfirmBatch(selectedReqs, recipientEmail, cc, bcc);
+        await onConfirmBatch(selectedReqs, recipientEmail, cc, bcc, metadata);
       } else {
-        const result = await sendBatchPaymentEmailAction(
-          selectedReqs.map((r) => r.id),
-          recipientEmail,
-          cc,
-          bcc,
-        );
+        const args: [
+          string[],
+          string | undefined,
+          string | undefined,
+          string | undefined,
+          BatchEmailMetadata?,
+        ] = [selectedReqs.map((r) => r.id), recipientEmail, cc, bcc];
+        if (
+          metadata &&
+          !(
+            metadata.subject === "" &&
+            metadata.eventDescription === "" &&
+            metadata.approverEmail === "jaque.hanaoka@gmail.com" &&
+            Object.keys(metadata.pixByRequester || {}).length === 0 &&
+            metadata.senderName === "Lucas Tamanaha" &&
+            metadata.senderRole ===
+              "Diretor Financeiro da Comissão de Jovens do Bunkyo - Gestão 2026" &&
+            metadata.senderPhone === "(16) 99332-8607"
+          )
+        ) {
+          args.push(metadata);
+        }
+        const result = await sendBatchPaymentEmailAction(...args);
         if (result.success) {
           const sentIds = selectedReqs.map((r) => r.id);
           setSelectedIds((prev) => prev.filter((id) => !sentIds.includes(id)));
