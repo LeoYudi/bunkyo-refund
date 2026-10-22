@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   processBatchReceiptsAction,
@@ -332,7 +332,7 @@ describe("RequestsTable", () => {
       ).not.toBeInTheDocument();
     });
 
-    it("should trigger onProcessRequest callback with request id when 'Aprovar para Leitura' menuitem is clicked", () => {
+    it("should trigger onProcessRequest callback with request id when 'Aprovar para Leitura' menuitem is clicked", async () => {
       const onProcessRequestMock = vi.fn();
 
       render(
@@ -350,13 +350,15 @@ describe("RequestsTable", () => {
       const approveItem = screen.getByRole("menuitem", {
         name: /aprovar para leitura/i,
       });
-      fireEvent.click(approveItem);
+      await act(async () => {
+        fireEvent.click(approveItem);
+      });
 
       expect(onProcessRequestMock).toHaveBeenCalledTimes(1);
       expect(onProcessRequestMock).toHaveBeenCalledWith("req-1");
     });
 
-    it("should call default processReceiptAction with request id when 'Aprovar para Leitura' menuitem is clicked and onProcessRequest is not provided", () => {
+    it("should call default processReceiptAction with request id when 'Aprovar para Leitura' menuitem is clicked and onProcessRequest is not provided", async () => {
       render(<RequestsTable requests={mockDetailedRequests} />);
 
       const actionButtons = screen.getAllByRole("button", {
@@ -367,7 +369,9 @@ describe("RequestsTable", () => {
       const approveItem = screen.getByRole("menuitem", {
         name: /aprovar para leitura/i,
       });
-      fireEvent.click(approveItem);
+      await act(async () => {
+        fireEvent.click(approveItem);
+      });
 
       expect(processReceiptAction).toHaveBeenCalledTimes(1);
       expect(processReceiptAction).toHaveBeenCalledWith("req-1");
@@ -726,7 +730,7 @@ describe("RequestsTable", () => {
       expect(batchApproveButton).toBeDisabled();
     });
 
-    it("should call processBatchReceiptsAction with only selected PENDING request IDs when both PENDING and APPROVED rows are selected and 'Aprovar para Leitura em Lote' is clicked", () => {
+    it("should call processBatchReceiptsAction with only selected PENDING request IDs when both PENDING and APPROVED rows are selected and 'Aprovar para Leitura em Lote' is clicked", async () => {
       render(<RequestsTable requests={bulkMockRequests} />);
 
       const allCheckboxes = screen.getAllByRole("checkbox");
@@ -741,7 +745,9 @@ describe("RequestsTable", () => {
       const batchApproveButton = screen.getByRole("button", {
         name: /aprovar para leitura em lote/i,
       });
-      fireEvent.click(batchApproveButton);
+      await act(async () => {
+        fireEvent.click(batchApproveButton);
+      });
 
       expect(processBatchReceiptsAction).toHaveBeenCalledTimes(1);
       expect(processBatchReceiptsAction).toHaveBeenCalledWith(["req-pending"]);
@@ -774,7 +780,7 @@ describe("RequestsTable", () => {
       expect(screen.getByText(/R\$\s*600,00/)).toBeInTheDocument();
     });
 
-    it("should render 'Exportar CSV' button disabled initially, enable it when any request is selected, and call exportToCsvAction with selectedIds when clicked", () => {
+    it("should render 'Exportar CSV' button disabled initially, enable it when any request is selected, and call exportToCsvAction with selectedIds when clicked", async () => {
       render(<RequestsTable requests={bulkMockRequests} />);
 
       const exportCsvButton = screen.getByRole("button", {
@@ -791,7 +797,9 @@ describe("RequestsTable", () => {
       expect(exportCsvButton).not.toBeDisabled();
 
       fireEvent.click(approved1Cb);
-      fireEvent.click(exportCsvButton);
+      await act(async () => {
+        fireEvent.click(exportCsvButton);
+      });
 
       expect(exportToCsvAction).toHaveBeenCalledTimes(1);
       expect(exportToCsvAction).toHaveBeenCalledWith([
@@ -800,7 +808,7 @@ describe("RequestsTable", () => {
       ]);
     });
 
-    it("should call sendBatchPaymentEmailAction with selected APPROVED request IDs, recipientEmail, cc, and bcc when confirming inside BatchPaymentDialog (without onConfirmBatch prop)", () => {
+    it("should call sendBatchPaymentEmailAction with selected APPROVED request IDs, recipientEmail, cc, and bcc when confirming inside BatchPaymentDialog (without onConfirmBatch prop)", async () => {
       render(<RequestsTable requests={bulkMockRequests} />);
 
       const allCheckboxes = screen.getAllByRole("checkbox");
@@ -836,7 +844,9 @@ describe("RequestsTable", () => {
       const confirmButton = screen.getByRole("button", {
         name: /confirmar envio/i,
       });
-      fireEvent.click(confirmButton);
+      await act(async () => {
+        fireEvent.click(confirmButton);
+      });
 
       expect(sendBatchPaymentEmailAction).toHaveBeenCalledTimes(1);
       expect(sendBatchPaymentEmailAction).toHaveBeenCalledWith(

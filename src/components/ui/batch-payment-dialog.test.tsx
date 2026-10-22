@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { RefundRequest } from "@/models/refund.model";
 import { BatchPaymentDialog } from "./batch-payment-dialog";
@@ -109,7 +109,7 @@ describe("BatchPaymentDialog", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("should call onConfirm with selectedRequests and empty recipientEmail, cc, and bcc when 'Confirmar Envio' button is clicked without filling emails", () => {
+  it("should call onConfirm with selectedRequests and empty recipientEmail, cc, and bcc when 'Confirmar Envio' button is clicked without filling emails", async () => {
     const onConfirm = vi.fn();
     render(
       <BatchPaymentDialog
@@ -127,12 +127,14 @@ describe("BatchPaymentDialog", () => {
     expect(screen.getByLabelText(/Cc \(Cópia\)/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Cco \(Cópia Oculta\)/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /confirmar envio/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /confirmar envio/i }));
+    });
     expect(onConfirm).toHaveBeenCalledTimes(1);
     expect(onConfirm).toHaveBeenCalledWith(mockSelectedRequests, "", "", "");
   });
 
-  it("should render recipient email, Cc, and Cco inputs and pass the typed values to onConfirm when 'Confirmar Envio' is clicked", () => {
+  it("should render recipient email, Cc, and Cco inputs and pass the typed values to onConfirm when 'Confirmar Envio' is clicked", async () => {
     const onConfirm = vi.fn();
     render(
       <BatchPaymentDialog
@@ -159,7 +161,9 @@ describe("BatchPaymentDialog", () => {
       target: { value: "diretoria@bunkyo.org.br" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /confirmar envio/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /confirmar envio/i }));
+    });
     expect(onConfirm).toHaveBeenCalledTimes(1);
     expect(onConfirm).toHaveBeenCalledWith(
       mockSelectedRequests,
