@@ -6,6 +6,8 @@ import type { RefundRequest } from "@/models/refund.model";
 export interface SendBatchEmailParams {
   requests: RefundRequest[];
   recipientEmail?: string;
+  cc?: string;
+  bcc?: string;
   date: string;
 }
 

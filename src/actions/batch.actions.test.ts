@@ -85,6 +85,29 @@ describe("batch.actions", () => {
       });
     });
 
+    it("should forward requestIds, recipientEmail, cc, and bcc to refundService.sendBatchPayment", async () => {
+      mockServiceInstance.sendBatchPayment.mockResolvedValue(mockSentRequests);
+
+      const result = await sendBatchPaymentEmailAction(
+        ["req-1"],
+        "financeiro@bunkyo.org.br",
+        "cc@bunkyo.org.br",
+        "bcc@bunkyo.org.br",
+      );
+
+      expect(mockServiceInstance.sendBatchPayment).toHaveBeenCalledWith(
+        ["req-1"],
+        "financeiro@bunkyo.org.br",
+        "cc@bunkyo.org.br",
+        "bcc@bunkyo.org.br",
+      );
+      expect(revalidatePath).toHaveBeenCalledWith("/admin");
+      expect(result).toEqual({
+        success: true,
+        data: mockSentRequests,
+      });
+    });
+
     it("should catch service exceptions and return { success: false, error }", async () => {
       mockServiceInstance.sendBatchPayment.mockRejectedValue(
         new Error("Falha ao enviar e-mail pelo Gmail"),

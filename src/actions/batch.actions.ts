@@ -7,6 +7,8 @@ import { RefundService } from "@/services/refund.service";
 export async function sendBatchPaymentEmailAction(
   requestIds: string[],
   recipientEmail?: string,
+  _cc?: string,
+  _bcc?: string,
 ): Promise<{
   success: boolean;
   data?: RefundRequest[];

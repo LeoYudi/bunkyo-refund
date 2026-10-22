@@ -19,6 +19,8 @@ export interface BatchPaymentDialogProps {
   onConfirm?: (
     selectedRequests: RefundRequest[],
     recipientEmail?: string,
+    cc?: string,
+    bcc?: string,
   ) => void | Promise<void>;
 }
 

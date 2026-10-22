@@ -111,6 +111,8 @@ export class RefundService {
   async sendBatchPayment(
     requestIds: string[],
     recipientEmail?: string,
+    _cc?: string,
+    _bcc?: string,
   ): Promise<RefundRequest[]> {
     if (!requestIds || requestIds.length === 0) {
       throw new Error("Nenhuma solicitação selecionada");

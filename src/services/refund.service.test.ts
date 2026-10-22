@@ -716,6 +716,34 @@ describe("RefundService", () => {
       ]);
     });
 
+    it("should forward cc and bcc arguments to sendBatchEmailWithGmail", async () => {
+      const service = new RefundService();
+
+      mockRepositoryInstance.findById.mockResolvedValue(mockApprovedReq1);
+      vi.mocked(sendBatchEmailWithGmail).mockResolvedValue({
+        messageId: "gmail-msg-456",
+      });
+      mockRepositoryInstance.updateStatus.mockResolvedValue({
+        ...mockApprovedReq1,
+        status: "SENT",
+      });
+
+      await service.sendBatchPayment(
+        ["req-1"],
+        "financeiro@bunkyo.org.br",
+        "cc@bunkyo.org.br",
+        "bcc@bunkyo.org.br",
+      );
+
+      expect(sendBatchEmailWithGmail).toHaveBeenCalledWith({
+        requests: [mockApprovedReq1],
+        recipientEmail: "financeiro@bunkyo.org.br",
+        cc: "cc@bunkyo.org.br",
+        bcc: "bcc@bunkyo.org.br",
+        date: expect.any(String),
+      });
+    });
+
     it("should throw an error if requestIds is empty", async () => {
       const service = new RefundService();
 

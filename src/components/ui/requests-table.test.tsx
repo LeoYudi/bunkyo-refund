@@ -800,7 +800,7 @@ describe("RequestsTable", () => {
       ]);
     });
 
-    it("should call sendBatchPaymentEmailAction with selected APPROVED request IDs and recipientEmail when confirming inside BatchPaymentDialog (without onConfirmBatch prop)", () => {
+    it("should call sendBatchPaymentEmailAction with selected APPROVED request IDs, recipientEmail, cc, and bcc when confirming inside BatchPaymentDialog (without onConfirmBatch prop)", () => {
       render(<RequestsTable requests={bulkMockRequests} />);
 
       const allCheckboxes = screen.getAllByRole("checkbox");
@@ -820,8 +820,17 @@ describe("RequestsTable", () => {
       const emailInput = screen.getByPlaceholderText(
         /e-mail|destinatário|financeiro/i,
       );
+      const ccInput = screen.getByLabelText(/Cc \(Cópia\)/i);
+      const bccInput = screen.getByLabelText(/Cco \(Cópia Oculta\)/i);
+
       fireEvent.change(emailInput, {
         target: { value: "financeiro@bunkyo.org.br" },
+      });
+      fireEvent.change(ccInput, {
+        target: { value: "cc@bunkyo.org.br" },
+      });
+      fireEvent.change(bccInput, {
+        target: { value: "bcc@bunkyo.org.br" },
       });
 
       const confirmButton = screen.getByRole("button", {
@@ -833,6 +842,8 @@ describe("RequestsTable", () => {
       expect(sendBatchPaymentEmailAction).toHaveBeenCalledWith(
         ["req-approved-1", "req-approved-2"],
         "financeiro@bunkyo.org.br",
+        "cc@bunkyo.org.br",
+        "bcc@bunkyo.org.br",
       );
     });
   });

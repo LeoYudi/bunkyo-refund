@@ -37,6 +37,8 @@ export interface RequestsTableProps {
   onConfirmBatch?: (
     selectedRequests: RefundRequest[],
     recipientEmail?: string,
+    cc?: string,
+    bcc?: string,
   ) => void | Promise<void>;
   onExportCsv?: (requestIds: string[]) => Promise<void> | void;
 }
@@ -159,6 +161,8 @@ export function RequestsTable({
   const handleConfirmBatch = async (
     selectedReqs: RefundRequest[],
     recipientEmail?: string,
+    _cc?: string,
+    _bcc?: string,
   ) => {
     setErrorMessage(null);
     try {

@@ -100,7 +100,58 @@ describe("email.service - sendBatchEmailWithGmail", () => {
       raw: expect.any(String),
     });
 
+    const decodedMime = Buffer.from(parsedBody.raw, "base64url").toString(
+      "utf-8",
+    );
+    expect(decodedMime).toContain("To: financeiro@bunkyo.org.br\r\n");
+    expect(decodedMime).not.toContain("Cc:");
+    expect(decodedMime).not.toContain("Bcc:");
+
     expect(result).toEqual({ messageId: "gmail-msg-123" });
+  });
+
+  it("should include Cc and Bcc headers in the raw MIME message when cc and bcc are provided", async () => {
+    await sendBatchEmailWithGmail({
+      requests: mockRequests,
+      recipientEmail: "financeiro@bunkyo.org.br",
+      cc: "gestor@bunkyo.org.br, contabilidade@bunkyo.org.br",
+      bcc: "diretoria@bunkyo.org.br",
+      date: "21/10/2026",
+    });
+
+    const fetchCallArgs = vi.mocked(global.fetch).mock.calls[0];
+    const parsedBody = JSON.parse(fetchCallArgs[1]?.body as string) as {
+      raw: string;
+    };
+    const decodedMime = Buffer.from(parsedBody.raw, "base64url").toString(
+      "utf-8",
+    );
+
+    expect(decodedMime).toContain(
+      "Cc: gestor@bunkyo.org.br, contabilidade@bunkyo.org.br\r\n",
+    );
+    expect(decodedMime).toContain("Bcc: diretoria@bunkyo.org.br\r\n");
+  });
+
+  it("should not include Cc or Bcc headers when cc and bcc are blank strings", async () => {
+    await sendBatchEmailWithGmail({
+      requests: mockRequests,
+      recipientEmail: "financeiro@bunkyo.org.br",
+      cc: "   ",
+      bcc: "",
+      date: "21/10/2026",
+    });
+
+    const fetchCallArgs = vi.mocked(global.fetch).mock.calls[0];
+    const parsedBody = JSON.parse(fetchCallArgs[1]?.body as string) as {
+      raw: string;
+    };
+    const decodedMime = Buffer.from(parsedBody.raw, "base64url").toString(
+      "utf-8",
+    );
+
+    expect(decodedMime).not.toContain("Cc:");
+    expect(decodedMime).not.toContain("Bcc:");
   });
 
   it("should throw an error when session.provider_token is missing", async () => {
