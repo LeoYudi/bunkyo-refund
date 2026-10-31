@@ -19,6 +19,10 @@ import {
   sendBatchPaymentEmailAction,
 } from "@/actions/batch.actions";
 import {
+  deleteRefundRequestAction,
+  updateRefundRequestAction,
+} from "@/actions/refund.actions";
+import {
   REFUND_STATUS_MAP,
   type RefundRequest,
   type UpdateRefundInput,
@@ -231,6 +235,30 @@ export function RequestsTable({
       setErrorMessage(error instanceof Error ? error.message : String(error));
     } finally {
       setProcessingId(null);
+    }
+  };
+
+  const handleEditConfirm = async (payload: UpdateRefundInput) => {
+    if (!editingRequest) return;
+    if (onEditRequest) {
+      await onEditRequest(editingRequest, payload);
+    } else {
+      const res = await updateRefundRequestAction(editingRequest.id, payload);
+      if (!res.success) {
+        throw new Error(res.error);
+      }
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingRequest) return;
+    if (onDeleteRequest) {
+      await onDeleteRequest(deletingRequest.id);
+    } else {
+      const res = await deleteRefundRequestAction(deletingRequest.id);
+      if (!res.success) {
+        throw new Error(res.error);
+      }
     }
   };
 
@@ -451,11 +479,7 @@ export function RequestsTable({
             setEditingRequest(null);
           }}
           request={editingRequest}
-          onConfirm={async (payload) => {
-            if (editingRequest && onEditRequest) {
-              await onEditRequest(editingRequest, payload);
-            }
-          }}
+          onConfirm={handleEditConfirm}
         />
 
         <DeleteRefundDialog
@@ -465,11 +489,7 @@ export function RequestsTable({
             setDeletingRequest(null);
           }}
           request={deletingRequest}
-          onConfirm={async () => {
-            if (deletingRequest && onDeleteRequest) {
-              await onDeleteRequest(deletingRequest.id);
-            }
-          }}
+          onConfirm={handleDeleteConfirm}
         />
 
         <BatchPaymentDialog
