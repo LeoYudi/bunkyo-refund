@@ -1,25 +1,33 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/models/database.types";
 import type {
   EmailSettings,
-  EmailSettingsPayload,
+  EmailSettingsInput,
 } from "@/models/settings.model";
-import type { SettingsRepository } from "@/repositories/settings.repository";
+import {
+  DEFAULT_EMAIL_SETTINGS,
+  EmailSettingsSchema,
+} from "@/models/settings.model";
+import { SettingsRepository } from "@/repositories/settings.repository";
 
 export class SettingsService {
   constructor(
-    repositoryOrClient?: SettingsRepository | SupabaseClient<Database>,
-  ) {
-    void repositoryOrClient;
-  }
+    private repository: SettingsRepository = new SettingsRepository(),
+  ) {}
 
   async getEmailSettings(): Promise<EmailSettings> {
-    throw new Error("Not implemented");
+    const saved = await this.repository.getSettings();
+    if (saved) {
+      return saved;
+    }
+    return {
+      id: "default",
+      ...DEFAULT_EMAIL_SETTINGS,
+    } as EmailSettings;
   }
 
   async saveEmailSettings(
-    _input: Partial<EmailSettingsPayload>,
+    input: Partial<EmailSettingsInput>,
   ): Promise<EmailSettings> {
-    return {} as EmailSettings;
+    const validated = EmailSettingsSchema.parse(input);
+    return await this.repository.upsertSettings(validated);
   }
 }
