@@ -69,5 +69,8 @@ export async function processReceiptWithAI(
   const rawData = JSON.parse(interaction.output_text);
   const validatedData = ReceiptAIExtractionSchema.parse(rawData);
 
-  return validatedData;
+  return {
+    ...validatedData,
+    raw_ai_response: interaction.output_text,
+  };
 }
