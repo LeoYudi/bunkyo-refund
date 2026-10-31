@@ -2,8 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import type { z } from "zod";
-import type { RefundRequest, RefundSchema } from "@/models/refund.model";
-import { CreateRefundSchema } from "@/models/refund.model";
+import {
+  CreateRefundSchema,
+  type RefundRequest,
+  type RefundSchema,
+  UpdateRefundSchema,
+} from "@/models/refund.model";
 import { RefundService } from "@/services/refund.service";
 
 export type SubmitRefundResult =
@@ -41,6 +45,46 @@ export async function getRefundRequestsAction(): Promise<GetRefundRequestsResult
     const refundService = new RefundService();
     const data = await refundService.getRefundRequests();
     return { success: true, data };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { success: false, error: errorMessage };
+  }
+}
+
+export async function updateRefundRequestAction(
+  id: string,
+  payload: unknown,
+): Promise<
+  { success: true; data: RefundRequest } | { success: false; error: string }
+> {
+  const validation = UpdateRefundSchema.safeParse(payload);
+  if (!validation.success) {
+    const errorMsg =
+      validation.error.issues?.[0]?.message ||
+      validation.error.message ||
+      "Dados inválidos";
+    return { success: false, error: errorMsg };
+  }
+
+  try {
+    const refundService = new RefundService();
+    const data = await refundService.updateRefundRequest(id, validation.data);
+    revalidatePath("/admin");
+    return { success: true, data };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { success: false, error: errorMessage };
+  }
+}
+
+export async function deleteRefundRequestAction(
+  id: string,
+): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    const refundService = new RefundService();
+    await refundService.deleteRefundRequest(id);
+    revalidatePath("/admin");
+    return { success: true };
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     return { success: false, error: errorMessage };

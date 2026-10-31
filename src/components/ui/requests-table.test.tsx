@@ -857,4 +857,69 @@ describe("RequestsTable", () => {
       );
     });
   });
+
+  describe("Phase 7 - Edit and Delete Refund Requests", () => {
+    const mockRequest: RefundRequest = {
+      id: "req-phase7-1",
+      requester_name: "Daniel Tanaka",
+      status: "APPROVED",
+      created_at: new Date("2026-10-28T10:00:00Z").toISOString(),
+      updated_at: new Date("2026-10-28T10:00:00Z").toISOString(),
+      description: "Despesa evento",
+      issue_date: "2026-10-28",
+      issue_number: "NF-555",
+      issuer_cnpj: "12.345.678/0001-90",
+      issuer_name: "Loja ABC",
+      receipt_file_url: "https://example.com/receipt.pdf",
+      receiver_cnpj: null,
+      reviewed_by: "admin-1",
+      total_value: 350.0,
+    };
+
+    it("should render 'Editar' and 'Excluir' options in the 3-dots menu", () => {
+      render(<RequestsTable requests={[mockRequest]} />);
+
+      const actionButton = screen.getByRole("button", {
+        name: /abrir menu|ações/i,
+      });
+      fireEvent.click(actionButton);
+
+      expect(
+        screen.getByRole("menuitem", { name: /editar/i }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("menuitem", { name: /excluir/i }),
+      ).toBeInTheDocument();
+    });
+
+    it("should open EditRefundDialog when clicking 'Editar' in the 3-dots menu", () => {
+      render(<RequestsTable requests={[mockRequest]} />);
+
+      const actionButton = screen.getByRole("button", {
+        name: /abrir menu|ações/i,
+      });
+      fireEvent.click(actionButton);
+
+      const editOption = screen.getByRole("menuitem", { name: /editar/i });
+      fireEvent.click(editOption);
+
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(screen.getByText(/editar solicita/i)).toBeInTheDocument();
+    });
+
+    it("should open DeleteRefundDialog when clicking 'Excluir' in the 3-dots menu", () => {
+      render(<RequestsTable requests={[mockRequest]} />);
+
+      const actionButton = screen.getByRole("button", {
+        name: /abrir menu|ações/i,
+      });
+      fireEvent.click(actionButton);
+
+      const deleteOption = screen.getByRole("menuitem", { name: /excluir/i });
+      fireEvent.click(deleteOption);
+
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(screen.getByText(/excluir solicita/i)).toBeInTheDocument();
+    });
+  });
 });
