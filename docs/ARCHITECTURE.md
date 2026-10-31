@@ -32,9 +32,9 @@ Responsável pela lógica central de OCR (Optical Character Recognition) e extra
 *   **Modelo Primário:** Gemini 3.8 Flash (`gemini-3.8-flash`) via Interactions API (`@google/genai`) — rápido e com suporte nativo a imagens/PDFs em Base64 e Structured Output.
 *   **Integração:** O backend Next.js fará o proxy do arquivo para a API do Gemini, utilizando a funcionalidade "Structured Output" (forçando o retorno a ser um JSON perfeitamente formatado para o banco de dados).
 
-### 4. Serviço de Disparo de E-mails: Resend
-*   **Ferramenta:** Resend + React Email.
-*   **Papel:** Receber os dados estruturados da nota, gerar um template HTML visualmente agradável (utilizando React Email) e enviá-lo por SMTP/API para o e-mail cadastrado do departamento financeiro.
+### 4. Serviço de Disparo de E-mails: Gmail API + React Email
+*   **Ferramenta:** Gmail API (`users/me/messages/send` autenticado via OAuth `provider_token` com escopo `gmail.send`) + React Email (`@react-email/components`).
+*   **Papel:** Receber os dados estruturados das notas aprovadas e as configurações de template (`email_settings`), gerar o HTML no padrão CJB (agrupando por `Pessoa | PIX | Valor`), anexar os comprovantes originais via MIME `multipart/mixed` e disparar com suporte a `To`, `Cc` e `Bcc`.
 
 ### 5. Qualidade de Código e Testes (QA)
 *   **Ferramenta de Testes (Unitários):** **Vitest**. Moderno, incrivelmente rápido, possui a mesma API do Jest e será a arma principal do Subagente de QA.

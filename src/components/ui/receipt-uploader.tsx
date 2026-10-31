@@ -7,6 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { CameraCapture } from "./camera-capture";
 
+export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+
 interface ReceiptUploaderProps {
   onFileSelect?: (file: File) => void;
   selectedFile?: File | null;
@@ -19,7 +21,25 @@ export function ReceiptUploader({
   className,
 }: ReceiptUploaderProps) {
   const [isDragActive, setIsDragActive] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const validateAndSelectFile = useCallback(
+    (file: File) => {
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        setFileError(
+          "O arquivo é muito grande. O tamanho máximo permitido é de 5MB.",
+        );
+        if (inputRef.current) {
+          inputRef.current.value = "";
+        }
+        return;
+      }
+      setFileError(null);
+      onFileSelect?.(file);
+    },
+    [onFileSelect],
+  );
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -47,20 +67,20 @@ export function ReceiptUploader({
       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
         const file = e.dataTransfer.files[0];
         if (file.type.startsWith("image/") || file.type === "application/pdf") {
-          onFileSelect?.(file);
+          validateAndSelectFile(file);
         }
       }
     },
-    [onFileSelect],
+    [validateAndSelectFile],
   );
 
   const handleFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files.length > 0) {
-        onFileSelect?.(e.target.files[0]);
+        validateAndSelectFile(e.target.files[0]);
       }
     },
-    [onFileSelect],
+    [validateAndSelectFile],
   );
 
   const handleClick = useCallback(() => {
@@ -120,7 +140,9 @@ export function ReceiptUploader({
               <p className="text-sm font-medium text-foreground">
                 Arraste e solte o comprovante aqui
               </p>
-              <p className="text-xs text-muted-foreground">PNG, JPG ou PDF</p>
+              <p className="text-xs text-muted-foreground">
+                PNG, JPG ou PDF (máx. 5MB)
+              </p>
             </div>
           )}
 
@@ -143,12 +165,21 @@ export function ReceiptUploader({
         </CardContent>
       </Card>
 
+      {fileError && (
+        <p
+          role="alert"
+          className="text-xs font-medium text-destructive text-center"
+        >
+          {fileError}
+        </p>
+      )}
+
       {!selectedFile && (
         <div className="flex flex-wrap items-center justify-center gap-2">
           <p className="text-sm text-muted-foreground">
             Ou prefere tirar uma foto agora?
           </p>
-          <CameraCapture onCapture={(file) => onFileSelect?.(file)} />
+          <CameraCapture onCapture={(file) => validateAndSelectFile(file)} />
         </div>
       )}
     </div>

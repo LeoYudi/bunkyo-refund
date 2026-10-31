@@ -231,6 +231,15 @@ describe("RefundService", () => {
       issue_date: "2026-09-25",
       issue_number: "NF-1234",
       description: "Almoço com equipe",
+      raw_ai_response: JSON.stringify({
+        issuer_name: "Restaurante Bunkyo",
+        issuer_cnpj: "12345678000199",
+        receiver_cnpj: "98765432000199",
+        total_value: 150.5,
+        issue_date: "2026-09-25",
+        issue_number: "NF-1234",
+        description: "Almoço com equipe",
+      }),
     };
 
     it("should successfully approve and process a PDF receipt", async () => {
@@ -388,23 +397,19 @@ describe("RefundService", () => {
       );
     });
 
-    it("should handle null fields in extracted AI data and update request with status APPROVED", async () => {
+    it("should save raw_ai_response, keep status PENDING, and throw an error when required receipt fields are missing or invalid (e.g. non-receipt image with null fields)", async () => {
       const service = new RefundService();
 
       const partialExtractedData = {
-        issuer_name: "Restaurante Bunkyo",
+        issuer_name: null,
         issuer_cnpj: null,
         receiver_cnpj: null,
         total_value: null,
         issue_date: null,
         issue_number: null,
         description: null,
-      };
-
-      const mockApprovedWithNulls: RefundRequest = {
-        ...mockPendingRequest,
-        ...partialExtractedData,
-        status: "APPROVED",
+        raw_ai_response:
+          '{"issuer_name":null,"issuer_cnpj":null,"receiver_cnpj":null,"total_value":null,"issue_date":null,"issue_number":null,"description":null}',
       };
 
       mockRepositoryInstance.findById.mockResolvedValue(mockPendingRequest);
@@ -412,17 +417,115 @@ describe("RefundService", () => {
         ...mockPendingRequest,
         status: "PROCESSING",
       });
-      vi.mocked(processReceiptWithAI).mockResolvedValue(partialExtractedData);
-      mockRepositoryInstance.update.mockResolvedValue(mockApprovedWithNulls);
+      vi.mocked(processReceiptWithAI).mockResolvedValue(
+        partialExtractedData as unknown as Awaited<
+          ReturnType<typeof processReceiptWithAI>
+        >,
+      );
+      mockRepositoryInstance.update.mockResolvedValue({
+        ...mockPendingRequest,
+        raw_ai_response: partialExtractedData.raw_ai_response,
+        status: "PENDING",
+      });
 
-      const result = await service.approveAndProcessReceipt("req-123");
+      await expect(service.approveAndProcessReceipt("req-123")).rejects.toThrow(
+        "Não foi possível extrair todas as informações obrigatórias da nota fiscal (Emissor, CNPJ, Data de Emissão e Valor Total). Verifique se o arquivo enviado é uma nota fiscal válida.",
+      );
 
       expect(mockRepositoryInstance.update).toHaveBeenCalledWith("req-123", {
-        ...partialExtractedData,
-        status: "APPROVED",
+        raw_ai_response: partialExtractedData.raw_ai_response,
+        status: "PENDING",
       });
-      expect(result).toEqual(mockApprovedWithNulls);
     });
+
+    it.each([
+      [
+        "issuer_name is null",
+        {
+          issuer_name: null,
+          issuer_cnpj: "12345678000199",
+          issue_date: "2026-09-25",
+          total_value: 150.5,
+        },
+      ],
+      [
+        "issuer_cnpj is null",
+        {
+          issuer_name: "Restaurante Bunkyo",
+          issuer_cnpj: null,
+          issue_date: "2026-09-25",
+          total_value: 150.5,
+        },
+      ],
+      [
+        "issue_date is null",
+        {
+          issuer_name: "Restaurante Bunkyo",
+          issuer_cnpj: "12345678000199",
+          issue_date: null,
+          total_value: 150.5,
+        },
+      ],
+      [
+        "total_value is null",
+        {
+          issuer_name: "Restaurante Bunkyo",
+          issuer_cnpj: "12345678000199",
+          issue_date: "2026-09-25",
+          total_value: null,
+        },
+      ],
+      [
+        "total_value is 0",
+        {
+          issuer_name: "Restaurante Bunkyo",
+          issuer_cnpj: "12345678000199",
+          issue_date: "2026-09-25",
+          total_value: 0,
+        },
+      ],
+    ])(
+      "should reject approval and keep status PENDING with raw_ai_response saved when %s",
+      async (_scenario, overrides) => {
+        const service = new RefundService();
+
+        const invalidExtractedData = {
+          ...mockExtractedData,
+          ...overrides,
+          raw_ai_response: JSON.stringify({
+            ...mockExtractedData,
+            ...overrides,
+          }),
+        };
+
+        mockRepositoryInstance.findById.mockResolvedValue(mockPendingRequest);
+        mockRepositoryInstance.updateStatus.mockResolvedValue({
+          ...mockPendingRequest,
+          status: "PROCESSING",
+        });
+        vi.mocked(processReceiptWithAI).mockResolvedValue(
+          invalidExtractedData as unknown as Awaited<
+            ReturnType<typeof processReceiptWithAI>
+          >,
+        );
+        mockRepositoryInstance.update.mockResolvedValue({
+          ...mockPendingRequest,
+          raw_ai_response: invalidExtractedData.raw_ai_response,
+          status: "PENDING",
+        });
+
+        await expect(
+          service.approveAndProcessReceipt("req-123"),
+        ).rejects.toThrow(
+          "Não foi possível extrair todas as informações obrigatórias da nota fiscal (Emissor, CNPJ, Data de Emissão e Valor Total). Verifique se o arquivo enviado é uma nota fiscal válida.",
+        );
+
+        expect(mockRepositoryInstance.update).toHaveBeenCalledWith("req-123", {
+          raw_ai_response: invalidExtractedData.raw_ai_response,
+          status: "PENDING",
+        });
+      },
+    );
 
     it("should throw an error when refund request is not found", async () => {
       const service = new RefundService();
@@ -544,6 +647,15 @@ describe("RefundService", () => {
       issue_date: "2026-09-25",
       issue_number: "NF-1234",
       description: "Almoço com equipe",
+      raw_ai_response: JSON.stringify({
+        issuer_name: "Restaurante Bunkyo",
+        issuer_cnpj: "12345678000199",
+        receiver_cnpj: "98765432000199",
+        total_value: 150.5,
+        issue_date: "2026-09-25",
+        issue_number: "NF-1234",
+        description: "Almoço com equipe",
+      }),
     };
 
     const mockApprovedReq1: RefundRequest = {

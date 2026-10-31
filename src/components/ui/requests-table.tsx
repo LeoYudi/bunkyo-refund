@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Bot,
   CheckCircle,
   Download,
   Eye,
@@ -23,6 +24,14 @@ import {
   BatchPaymentDialog,
 } from "./batch-payment-dialog";
 import { Button } from "./button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,6 +67,10 @@ export function RequestsTable({
     null,
   );
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedAiResponse, setSelectedAiResponse] = useState<string | null>(
+    null,
+  );
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
   const [isExportingCsv, setIsExportingCsv] = useState(false);
@@ -330,8 +343,9 @@ export function RequestsTable({
                   req.status === "PENDING" || req.status === "APPROVED";
                 const isSelected = selectedIds.includes(req.id);
                 const hasReceipt = Boolean(req.receipt_file_url);
+                const hasAiResponse = Boolean(req.raw_ai_response?.trim());
                 const canProcess = req.status === "PENDING";
-                const hasActions = hasReceipt || canProcess;
+                const hasActions = hasReceipt || hasAiResponse || canProcess;
                 return (
                   <tr
                     key={req.id}
@@ -395,6 +409,19 @@ export function RequestsTable({
                               Visualizar Nota Fiscal
                             </DropdownMenuItem>
                           )}
+                          {hasAiResponse && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedAiResponse(
+                                  req.raw_ai_response ?? null,
+                                );
+                                setIsAiModalOpen(true);
+                              }}
+                            >
+                              <Bot className="size-4" />
+                              Ver Retorno da IA
+                            </DropdownMenuItem>
+                          )}
                           {canProcess && (
                             <DropdownMenuItem
                               disabled={processingId === req.id}
@@ -422,6 +449,41 @@ export function RequestsTable({
           }}
           receiptUrl={selectedReceiptUrl}
         />
+
+        <Dialog
+          open={isAiModalOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setIsAiModalOpen(false);
+              setSelectedAiResponse(null);
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Retorno da IA (Gemini)</DialogTitle>
+              <DialogDescription>
+                Resposta bruta extraída pela inteligência artificial para esta
+                solicitação.
+              </DialogDescription>
+            </DialogHeader>
+            <pre className="p-4 rounded-lg bg-muted text-xs font-mono overflow-x-auto whitespace-pre-wrap break-words max-h-96 overflow-y-auto">
+              {selectedAiResponse}
+            </pre>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsAiModalOpen(false);
+                  setSelectedAiResponse(null);
+                }}
+              >
+                Fechar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <BatchPaymentDialog
           isOpen={isBatchDialogOpen}

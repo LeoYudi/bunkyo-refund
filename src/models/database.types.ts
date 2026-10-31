@@ -67,6 +67,7 @@ export type Database = {
           issue_number: string | null;
           issuer_cnpj: string | null;
           issuer_name: string | null;
+          raw_ai_response?: string | null;
           receipt_file_url: string;
           receiver_cnpj: string | null;
           requester_name: string;
@@ -83,6 +84,7 @@ export type Database = {
           issue_number?: string | null;
           issuer_cnpj?: string | null;
           issuer_name?: string | null;
+          raw_ai_response?: string | null;
           receipt_file_url: string;
           receiver_cnpj?: string | null;
           requester_name: string;
@@ -99,6 +101,7 @@ export type Database = {
           issue_number?: string | null;
           issuer_cnpj?: string | null;
           issuer_name?: string | null;
+          raw_ai_response?: string | null;
           receipt_file_url?: string;
           receiver_cnpj?: string | null;
           requester_name?: string;
@@ -116,6 +119,66 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      email_settings: {
+        Row: {
+          id: string;
+          recipient_email: string;
+          cc_email: string;
+          bcc_email: string;
+          subject_prefix: string;
+          default_event_description: string;
+          greeting_text: string;
+          intro_text_template: string;
+          spreadsheet_text: string;
+          approver_email: string;
+          approval_request_text: string;
+          closing_text: string;
+          sender_name: string;
+          sender_role: string;
+          sender_email: string;
+          sender_phone: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          recipient_email?: string;
+          cc_email?: string;
+          bcc_email?: string;
+          subject_prefix?: string;
+          default_event_description?: string;
+          greeting_text?: string;
+          intro_text_template?: string;
+          spreadsheet_text?: string;
+          approver_email?: string;
+          approval_request_text?: string;
+          closing_text?: string;
+          sender_name?: string;
+          sender_role?: string;
+          sender_email?: string;
+          sender_phone?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          recipient_email?: string;
+          cc_email?: string;
+          bcc_email?: string;
+          subject_prefix?: string;
+          default_event_description?: string;
+          greeting_text?: string;
+          intro_text_template?: string;
+          spreadsheet_text?: string;
+          approver_email?: string;
+          approval_request_text?: string;
+          closing_text?: string;
+          sender_name?: string;
+          sender_role?: string;
+          sender_email?: string;
+          sender_phone?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
       };
     };
     Views: {

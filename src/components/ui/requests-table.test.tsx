@@ -168,6 +168,55 @@ describe("RequestsTable", () => {
       expect(iframe).toBeInTheDocument();
       expect(iframe.src).toBe("http://example.com/alice.pdf");
     });
+
+    it("should show 'Ver Retorno da IA' in the 3-dots menu when raw_ai_response is present and open a modal with its content on click", () => {
+      const rawJson = '{"issuer_name": null, "total_value": null}';
+      const requestsWithAiResponse: RefundRequest[] = [
+        {
+          ...mockRequests[0],
+          raw_ai_response: rawJson,
+        },
+      ];
+
+      render(<RequestsTable requests={requestsWithAiResponse} />);
+
+      const actionButton = screen.getByRole("button", {
+        name: /abrir menu|ações/i,
+      });
+      fireEvent.click(actionButton);
+
+      const viewAiResponseOption = screen.getByRole("menuitem", {
+        name: /ver retorno da ia/i,
+      });
+      expect(viewAiResponseOption).toBeInTheDocument();
+
+      fireEvent.click(viewAiResponseOption);
+
+      const dialog = screen.getByRole("dialog");
+      expect(dialog).toBeInTheDocument();
+      expect(screen.getByText(/retorno da ia \(gemini\)/i)).toBeInTheDocument();
+      expect(screen.getByText(rawJson)).toBeInTheDocument();
+    });
+
+    it("should NOT show 'Ver Retorno da IA' in the 3-dots menu when raw_ai_response is null or empty", () => {
+      const requestsWithoutAiResponse: RefundRequest[] = [
+        {
+          ...mockRequests[0],
+          raw_ai_response: null,
+        },
+      ];
+
+      render(<RequestsTable requests={requestsWithoutAiResponse} />);
+
+      const actionButton = screen.getByRole("button", {
+        name: /abrir menu|ações/i,
+      });
+      fireEvent.click(actionButton);
+
+      expect(
+        screen.queryByRole("menuitem", { name: /ver retorno da ia/i }),
+      ).not.toBeInTheDocument();
+    });
   });
 
   describe("Phase 4 - Extracted Data and AI Actions Integration", () => {

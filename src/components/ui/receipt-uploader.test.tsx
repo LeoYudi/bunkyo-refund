@@ -27,6 +27,12 @@ describe("ReceiptUploader Base Component", () => {
     expect(textElement).not.toBeNull();
   });
 
+  it("displays the maximum file size limit (5MB) in the dropzone subtitle", () => {
+    render(<ReceiptUploader />);
+    const sizeLimitText = screen.queryByText(/5\s*MB/i);
+    expect(sizeLimitText).not.toBeNull();
+  });
+
   it("simulates opening the file dialog when the dropzone is clicked", () => {
     const { container } = render(<ReceiptUploader />);
     const fileInput = container.querySelector(
@@ -77,6 +83,104 @@ describe("ReceiptUploader Base Component", () => {
         fireEvent.click(button);
         expect(clickSpy).toHaveBeenCalled();
       }
+    });
+  });
+
+  describe("File size limit validation (5MB)", () => {
+    const MAX_SIZE_BYTES = 5 * 1024 * 1024;
+
+    it("shows an error message and does not call onFileSelect when a file larger than 5MB is selected via input", () => {
+      const onFileSelect = vi.fn();
+      const { container } = render(
+        <ReceiptUploader onFileSelect={onFileSelect} />,
+      );
+      const fileInput = container.querySelector(
+        'input[type="file"]:not([capture])',
+      ) as HTMLInputElement;
+      expect(fileInput).not.toBeNull();
+
+      const oversizedFile = new File(["content"], "large-receipt.pdf", {
+        type: "application/pdf",
+      });
+      Object.defineProperty(oversizedFile, "size", {
+        value: MAX_SIZE_BYTES + 1024,
+      });
+
+      fireEvent.change(fileInput, { target: { files: [oversizedFile] } });
+
+      expect(onFileSelect).not.toHaveBeenCalled();
+      expect(screen.queryByRole("alert")).not.toBeNull();
+      expect(
+        screen.queryByRole("alert") ??
+          screen.queryByText(/muito grande|excede|máximo.*5\s*MB/i),
+      ).not.toBeNull();
+    });
+
+    it("shows an error message and does not call onFileSelect when a file larger than 5MB is dropped", () => {
+      const onFileSelect = vi.fn();
+      const { container } = render(
+        <ReceiptUploader onFileSelect={onFileSelect} />,
+      );
+      const dropzone = container.querySelector(".border-dashed");
+      expect(dropzone).not.toBeNull();
+
+      const oversizedFile = new File(["content"], "large-receipt.png", {
+        type: "image/png",
+      });
+      Object.defineProperty(oversizedFile, "size", {
+        value: MAX_SIZE_BYTES + 1024,
+      });
+
+      if (dropzone) {
+        fireEvent.drop(dropzone, {
+          dataTransfer: { files: [oversizedFile] },
+        });
+      }
+
+      expect(onFileSelect).not.toHaveBeenCalled();
+      expect(
+        screen.queryByRole("alert") ??
+          screen.queryByText(/muito grande|excede|máximo.*5\s*MB/i),
+      ).not.toBeNull();
+    });
+
+    it("clears the error message and calls onFileSelect when a valid file (<= 5MB) is selected after an oversized file", () => {
+      const onFileSelect = vi.fn();
+      const { container } = render(
+        <ReceiptUploader onFileSelect={onFileSelect} />,
+      );
+      const fileInput = container.querySelector(
+        'input[type="file"]:not([capture])',
+      ) as HTMLInputElement;
+      expect(fileInput).not.toBeNull();
+
+      const oversizedFile = new File(["content"], "large-receipt.pdf", {
+        type: "application/pdf",
+      });
+      Object.defineProperty(oversizedFile, "size", {
+        value: MAX_SIZE_BYTES + 1024,
+      });
+
+      fireEvent.change(fileInput, { target: { files: [oversizedFile] } });
+      expect(onFileSelect).not.toHaveBeenCalled();
+      expect(
+        screen.queryByRole("alert") ??
+          screen.queryByText(/muito grande|excede|máximo.*5\s*MB/i),
+      ).not.toBeNull();
+
+      const validFile = new File(["valid content"], "valid-receipt.pdf", {
+        type: "application/pdf",
+      });
+      Object.defineProperty(validFile, "size", {
+        value: MAX_SIZE_BYTES,
+      });
+
+      fireEvent.change(fileInput, { target: { files: [validFile] } });
+      expect(onFileSelect).toHaveBeenCalledWith(validFile);
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(
+        screen.queryByText(/muito grande|excede|máximo permitido/i),
+      ).toBeNull();
     });
   });
 });

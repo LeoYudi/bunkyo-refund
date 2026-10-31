@@ -126,7 +126,10 @@ describe("ai.service.ts - processReceiptWithAI", () => {
       }),
     );
 
-    expect(result).toEqual(mockAiResponse);
+    expect(result).toEqual({
+      ...mockAiResponse,
+      raw_ai_response: JSON.stringify(mockAiResponse),
+    });
   });
 
   it("should throw an error if Supabase download fails (e.g. RLS)", async () => {
