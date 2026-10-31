@@ -91,6 +91,76 @@ describe("Refund Models", () => {
       expect(UpdateRefundSchema.safeParse(payload).success).toBe(true);
     });
 
+    it("should accept valid requester_name (minimum 2 characters)", () => {
+      expect(
+        UpdateRefundSchema.safeParse({ requester_name: "Jo" }).success,
+      ).toBe(true);
+      expect(
+        UpdateRefundSchema.safeParse({ requester_name: "Maria Silva" }).success,
+      ).toBe(true);
+    });
+
+    it("should reject requester_name with less than 2 characters", () => {
+      expect(
+        UpdateRefundSchema.safeParse({ requester_name: "J" }).success,
+      ).toBe(false);
+      expect(UpdateRefundSchema.safeParse({ requester_name: "" }).success).toBe(
+        false,
+      );
+    });
+
+    it("should accept partial updates with only requester_name, only status, or only total_value", () => {
+      expect(
+        UpdateRefundSchema.safeParse({ requester_name: "Alice" }).success,
+      ).toBe(true);
+      expect(UpdateRefundSchema.safeParse({ status: "PAID" }).success).toBe(
+        true,
+      );
+      expect(UpdateRefundSchema.safeParse({ total_value: 99.9 }).success).toBe(
+        true,
+      );
+    });
+
+    it("should accept all valid statuses defined in RefundStatusSchema", () => {
+      const statuses = [
+        "PENDING",
+        "PROCESSING",
+        "APPROVED",
+        "DENIED",
+        "SENT",
+        "PAID",
+      ];
+      for (const status of statuses) {
+        expect(UpdateRefundSchema.safeParse({ status }).success).toBe(true);
+      }
+    });
+
+    it("should allow optional text fields to be cleared with null", () => {
+      const payloadWithNulls = {
+        issuer_name: null,
+        issuer_cnpj: null,
+        receiver_cnpj: null,
+        issue_date: null,
+        issue_number: null,
+        description: null,
+      };
+      expect(UpdateRefundSchema.safeParse(payloadWithNulls).success).toBe(true);
+    });
+
+    it("should allow optional text fields to be cleared with empty string", () => {
+      const payloadWithEmptyStrings = {
+        issuer_name: "",
+        issuer_cnpj: "",
+        receiver_cnpj: "",
+        issue_date: "",
+        issue_number: "",
+        description: "",
+      };
+      expect(
+        UpdateRefundSchema.safeParse(payloadWithEmptyStrings).success,
+      ).toBe(true);
+    });
+
     it("should reject invalid total_value (e.g., negative value or zero)", () => {
       expect(UpdateRefundSchema.safeParse({ total_value: -10 }).success).toBe(
         false,
