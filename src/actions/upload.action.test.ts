@@ -83,4 +83,18 @@ describe("uploadReceipt Server Action", () => {
 
     await expect(uploadReceipt(formData)).rejects.toThrow("No file provided");
   });
+
+  it("should throw an error and not upload if the file exceeds 5MB", async () => {
+    const oversizedFile = new File(["dummy content"], "large-receipt.png", {
+      type: "image/png",
+    });
+    Object.defineProperty(oversizedFile, "size", {
+      value: 5 * 1024 * 1024 + 1,
+    });
+    const formData = new FormData();
+    formData.append("file", oversizedFile);
+
+    await expect(uploadReceipt(formData)).rejects.toThrow(/5\s*MB/i);
+    expect(mockUpload).not.toHaveBeenCalled();
+  });
 });
