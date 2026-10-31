@@ -229,13 +229,22 @@ export class RefundService {
         }
 
         if (storagePath) {
+          const decodedPath = decodeURIComponent(storagePath);
           const supabase = await createClient();
           if (supabase?.storage) {
-            await supabase.storage.from("receipts").remove([storagePath]);
+            const { error: storageError } = await supabase.storage
+              .from("receipts")
+              .remove([decodedPath]);
+            if (storageError) {
+              console.warn(
+                "Falha ao remover arquivo do storage:",
+                storageError,
+              );
+            }
           }
         }
-      } catch {
-        // Ignora falha no storage para não bloquear exclusão no banco
+      } catch (err) {
+        console.warn("Erro ao tentar remover arquivo do storage:", err);
       }
     }
 

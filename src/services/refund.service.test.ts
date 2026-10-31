@@ -935,7 +935,56 @@ describe("RefundService", () => {
       expect(mockRepositoryInstance.delete).toHaveBeenCalledWith("req-1");
     });
 
+    it("should handle URL-encoded filenames and call remove with decoded path", async () => {
+      const service = new RefundService();
+      const mockReqWithEncodedUrl: RefundRequest = {
+        ...mockReqWithStorageUrl,
+        receipt_file_url:
+          "https://supabase.co/storage/v1/object/public/receipts/20261031-nota%20fiscal.pdf",
+      };
+      mockRepositoryInstance.findById.mockResolvedValue(mockReqWithEncodedUrl);
+      mockRepositoryInstance.delete.mockResolvedValue(undefined);
+
+      await (
+        service as unknown as {
+          deleteRefundRequest: (id: string) => Promise<void>;
+        }
+      ).deleteRefundRequest("req-1");
+
+      expect(mockStorageRemove).toHaveBeenCalledWith([
+        "20261031-nota fiscal.pdf",
+      ]);
+      expect(mockRepositoryInstance.delete).toHaveBeenCalledWith("req-1");
+    });
+
+    it("should log a warning if storage remove returns an error and proceed with repository deletion", async () => {
+      const service = new RefundService();
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      mockRepositoryInstance.findById.mockResolvedValue(mockReqWithStorageUrl);
+      mockStorageRemove.mockResolvedValue({
+        data: null,
+        error: { message: "Storage RLS violation" },
+      });
+      mockRepositoryInstance.delete.mockResolvedValue(undefined);
+
+      await expect(
+        (
+          service as unknown as {
+            deleteRefundRequest: (id: string) => Promise<void>;
+          }
+        ).deleteRefundRequest("req-1"),
+      ).resolves.toBeUndefined();
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        "Falha ao remover arquivo do storage:",
+        { message: "Storage RLS violation" },
+      );
+      expect(mockRepositoryInstance.delete).toHaveBeenCalledWith("req-1");
+      warnSpy.mockRestore();
+    });
+
     it("should be resilient and complete repository deletion even if storage remove fails", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       const service = new RefundService();
       mockRepositoryInstance.findById.mockResolvedValue(mockReqWithStorageUrl);
       mockStorageRemove.mockRejectedValue(
@@ -951,7 +1000,12 @@ describe("RefundService", () => {
         ).deleteRefundRequest("req-1"),
       ).resolves.toBeUndefined();
 
+      expect(warnSpy).toHaveBeenCalledWith(
+        "Erro ao tentar remover arquivo do storage:",
+        expect.any(Error),
+      );
       expect(mockRepositoryInstance.delete).toHaveBeenCalledWith("req-1");
+      warnSpy.mockRestore();
     });
 
     it("should be resilient and complete repository deletion if receipt_file_url is empty or null", async () => {
