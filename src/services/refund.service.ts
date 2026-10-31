@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/models/database.types";
 import type { CreateRefundSchema, RefundRequest } from "@/models/refund.model";
 import { RefundRepository } from "@/repositories/refund.repository";
@@ -194,5 +195,50 @@ export class RefundService {
     );
 
     return `\uFEFF${[header, ...rows].join("\n")}`;
+  }
+
+  async updateRefundRequest(
+    id: string,
+    payload: z.infer<typeof import("@/models/refund.model").UpdateRefundSchema>,
+  ): Promise<RefundRequest> {
+    const request = await this.repository.findById(id);
+    if (!request) {
+      throw new Error("Solicitação de reembolso não encontrada");
+    }
+    return this.repository.update(id, payload);
+  }
+
+  async deleteRefundRequest(id: string): Promise<void> {
+    const request = await this.repository.findById(id);
+    if (!request) {
+      throw new Error("Solicitação de reembolso não encontrada");
+    }
+
+    if (request.receipt_file_url) {
+      try {
+        const url = request.receipt_file_url;
+        let storagePath = "";
+        if (url.includes("/receipts/")) {
+          const parts = url.split("/receipts/");
+          const afterReceipts = parts[1] || "";
+          storagePath = afterReceipts.split("?")[0] || "";
+        } else {
+          const urlWithoutQuery = url.split("?")[0] || "";
+          const segments = urlWithoutQuery.split("/");
+          storagePath = segments[segments.length - 1] || "";
+        }
+
+        if (storagePath) {
+          const supabase = await createClient();
+          if (supabase?.storage) {
+            await supabase.storage.from("receipts").remove([storagePath]);
+          }
+        }
+      } catch {
+        // Ignora falha no storage para não bloquear exclusão no banco
+      }
+    }
+
+    await this.repository.delete(id);
   }
 }

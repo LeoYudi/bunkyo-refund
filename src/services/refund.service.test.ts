@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
 import type { CreateRefundSchema } from "@/models/refund.model";
 import {
   RefundRepository,
@@ -8,6 +9,10 @@ import {
 import { processReceiptWithAI } from "@/services/ai.service";
 import { sendBatchEmailWithGmail } from "@/services/email.service";
 import { RefundService } from "./refund.service";
+
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: vi.fn(),
+}));
 
 vi.mock("@/repositories/refund.repository", () => {
   return {
@@ -34,7 +39,10 @@ describe("RefundService", () => {
     findById: ReturnType<typeof vi.fn>;
     updateStatus: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
   };
+  let mockStorageRemove: ReturnType<typeof vi.fn>;
+  let mockSupabaseStorage: { from: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -45,7 +53,19 @@ describe("RefundService", () => {
       findById: vi.fn(),
       updateStatus: vi.fn(),
       update: vi.fn(),
+      delete: vi.fn(),
     };
+
+    mockStorageRemove = vi.fn().mockResolvedValue({ data: [], error: null });
+    mockSupabaseStorage = {
+      from: vi.fn().mockReturnValue({
+        remove: mockStorageRemove,
+      }),
+    };
+
+    (createClient as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      storage: mockSupabaseStorage,
+    });
 
     // biome-ignore lint/complexity/useArrowFunction: constructor mock requires function
     vi.mocked(RefundRepository).mockImplementation(function () {
@@ -804,6 +824,168 @@ describe("RefundService", () => {
       expect(lines[1]).toContain('"Restaurante Sabor, Ltda"');
       expect(lines[1]).toContain('"Almoço ""Executivo"", equipe"');
       expect(lines[1]).toContain("https://example.com/receipts/doc1.pdf");
+    });
+  });
+
+  describe("updateRefundRequest", () => {
+    const mockExistingReq: RefundRequest = {
+      id: "req-1",
+      requester_name: "Original Name",
+      status: "PENDING",
+      issuer_name: null,
+      issuer_cnpj: null,
+      receiver_cnpj: null,
+      total_value: null,
+      issue_date: null,
+      issue_number: null,
+      description: null,
+      receipt_file_url: "https://example.com/receipt.pdf",
+      created_at: "2026-10-20T10:00:00Z",
+      updated_at: "2026-10-20T10:00:00Z",
+      reviewed_by: null,
+    };
+
+    it("should call repository.findById and repository.update and return updated request", async () => {
+      const service = new RefundService();
+      const updatedReq: RefundRequest = {
+        ...mockExistingReq,
+        requester_name: "Updated Name",
+        total_value: 200,
+        status: "APPROVED",
+      };
+
+      mockRepositoryInstance.findById.mockResolvedValue(mockExistingReq);
+      mockRepositoryInstance.update.mockResolvedValue(updatedReq);
+
+      const updatePayload = {
+        requester_name: "Updated Name",
+        total_value: 200,
+        status: "APPROVED" as const,
+      };
+
+      const result = await (
+        service as unknown as {
+          updateRefundRequest: (
+            id: string,
+            payload: unknown,
+          ) => Promise<RefundRequest>;
+        }
+      ).updateRefundRequest("req-1", updatePayload);
+
+      expect(mockRepositoryInstance.findById).toHaveBeenCalledWith("req-1");
+      expect(mockRepositoryInstance.update).toHaveBeenCalledWith(
+        "req-1",
+        updatePayload,
+      );
+      expect(result).toEqual(updatedReq);
+    });
+
+    it("should throw error if the refund request is not found", async () => {
+      const service = new RefundService();
+      mockRepositoryInstance.findById.mockResolvedValue(null);
+
+      await expect(
+        (
+          service as unknown as {
+            updateRefundRequest: (
+              id: string,
+              payload: unknown,
+            ) => Promise<RefundRequest>;
+          }
+        ).updateRefundRequest("req-404", { requester_name: "New Name" }),
+      ).rejects.toThrow(/não encontrada/i);
+
+      expect(mockRepositoryInstance.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("deleteRefundRequest", () => {
+    const mockReqWithStorageUrl: RefundRequest = {
+      id: "req-1",
+      requester_name: "Alice Silva",
+      status: "PENDING",
+      issuer_name: null,
+      issuer_cnpj: null,
+      receiver_cnpj: null,
+      total_value: null,
+      issue_date: null,
+      issue_number: null,
+      description: null,
+      receipt_file_url:
+        "https://supabase.co/storage/v1/object/public/receipts/20261031-receipt.pdf",
+      created_at: "2026-10-20T10:00:00Z",
+      updated_at: "2026-10-20T10:00:00Z",
+      reviewed_by: null,
+    };
+
+    it("should fetch request by id, extract storage path, remove file from storage, and delete from repository", async () => {
+      const service = new RefundService();
+      mockRepositoryInstance.findById.mockResolvedValue(mockReqWithStorageUrl);
+      mockRepositoryInstance.delete.mockResolvedValue(undefined);
+
+      await (
+        service as unknown as {
+          deleteRefundRequest: (id: string) => Promise<void>;
+        }
+      ).deleteRefundRequest("req-1");
+
+      expect(mockRepositoryInstance.findById).toHaveBeenCalledWith("req-1");
+      expect(mockSupabaseStorage.from).toHaveBeenCalledWith("receipts");
+      expect(mockStorageRemove).toHaveBeenCalledWith(["20261031-receipt.pdf"]);
+      expect(mockRepositoryInstance.delete).toHaveBeenCalledWith("req-1");
+    });
+
+    it("should be resilient and complete repository deletion even if storage remove fails", async () => {
+      const service = new RefundService();
+      mockRepositoryInstance.findById.mockResolvedValue(mockReqWithStorageUrl);
+      mockStorageRemove.mockRejectedValue(
+        new Error("Storage service unavailable"),
+      );
+      mockRepositoryInstance.delete.mockResolvedValue(undefined);
+
+      await expect(
+        (
+          service as unknown as {
+            deleteRefundRequest: (id: string) => Promise<void>;
+          }
+        ).deleteRefundRequest("req-1"),
+      ).resolves.toBeUndefined();
+
+      expect(mockRepositoryInstance.delete).toHaveBeenCalledWith("req-1");
+    });
+
+    it("should be resilient and complete repository deletion if receipt_file_url is empty or null", async () => {
+      const service = new RefundService();
+      const mockReqWithoutUrl: RefundRequest = {
+        ...mockReqWithStorageUrl,
+        receipt_file_url: "",
+      };
+      mockRepositoryInstance.findById.mockResolvedValue(mockReqWithoutUrl);
+      mockRepositoryInstance.delete.mockResolvedValue(undefined);
+
+      await (
+        service as unknown as {
+          deleteRefundRequest: (id: string) => Promise<void>;
+        }
+      ).deleteRefundRequest("req-1");
+
+      expect(mockStorageRemove).not.toHaveBeenCalled();
+      expect(mockRepositoryInstance.delete).toHaveBeenCalledWith("req-1");
+    });
+
+    it("should throw error if the refund request to delete is not found", async () => {
+      const service = new RefundService();
+      mockRepositoryInstance.findById.mockResolvedValue(null);
+
+      await expect(
+        (
+          service as unknown as {
+            deleteRefundRequest: (id: string) => Promise<void>;
+          }
+        ).deleteRefundRequest("req-404"),
+      ).rejects.toThrow(/não encontrada/i);
+
+      expect(mockRepositoryInstance.delete).not.toHaveBeenCalled();
     });
   });
 });
