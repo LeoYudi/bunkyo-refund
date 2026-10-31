@@ -6,6 +6,8 @@ import {
   Eye,
   Loader2,
   MoreHorizontal,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { useState } from "react";
 import {
@@ -16,16 +18,22 @@ import {
   exportToCsvAction,
   sendBatchPaymentEmailAction,
 } from "@/actions/batch.actions";
-import { REFUND_STATUS_MAP, type RefundRequest } from "@/models/refund.model";
+import {
+  REFUND_STATUS_MAP,
+  type RefundRequest,
+  type UpdateRefundInput,
+} from "@/models/refund.model";
 import { Badge } from "./badge";
 import { BatchPaymentDialog } from "./batch-payment-dialog";
 import { Button } from "./button";
+import { DeleteRefundDialog } from "./delete-refund-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./dropdown-menu";
+import { EditRefundDialog } from "./edit-refund-dialog";
 import { ReceiptModal } from "./receipt-modal";
 
 export type { RefundRequest };
@@ -41,6 +49,11 @@ export interface RequestsTableProps {
     bcc?: string,
   ) => void | Promise<void>;
   onExportCsv?: (requestIds: string[]) => Promise<void> | void;
+  onEditRequest?: (
+    request: RefundRequest,
+    payload: UpdateRefundInput,
+  ) => void | Promise<void>;
+  onDeleteRequest?: (requestId: string) => void | Promise<void>;
 }
 
 export function RequestsTable({
@@ -49,6 +62,8 @@ export function RequestsTable({
   onProcessBatch,
   onConfirmBatch,
   onExportCsv,
+  onEditRequest,
+  onDeleteRequest,
 }: RequestsTableProps) {
   const [selectedReceiptUrl, setSelectedReceiptUrl] = useState<string | null>(
     null,
@@ -60,6 +75,15 @@ export function RequestsTable({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false);
+
+  const [editingRequest, setEditingRequest] = useState<RefundRequest | null>(
+    null,
+  );
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [deletingRequest, setDeletingRequest] = useState<RefundRequest | null>(
+    null,
+  );
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const selectableRequests = requests.filter(
     (r) => r.status === "PENDING" || r.status === "APPROVED",
@@ -382,6 +406,25 @@ export function RequestsTable({
                               Aprovar para Leitura
                             </DropdownMenuItem>
                           )}
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setEditingRequest(req);
+                              setIsEditDialogOpen(true);
+                            }}
+                          >
+                            <Pencil className="size-4" />
+                            Editar Solicitação
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => {
+                              setDeletingRequest(req);
+                              setIsDeleteDialogOpen(true);
+                            }}
+                          >
+                            <Trash2 className="size-4" />
+                            Excluir Solicitação
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </td>
@@ -399,6 +442,34 @@ export function RequestsTable({
             setSelectedReceiptUrl(null);
           }}
           receiptUrl={selectedReceiptUrl}
+        />
+
+        <EditRefundDialog
+          isOpen={isEditDialogOpen}
+          onClose={() => {
+            setIsEditDialogOpen(false);
+            setEditingRequest(null);
+          }}
+          request={editingRequest}
+          onConfirm={async (payload) => {
+            if (editingRequest && onEditRequest) {
+              await onEditRequest(editingRequest, payload);
+            }
+          }}
+        />
+
+        <DeleteRefundDialog
+          isOpen={isDeleteDialogOpen}
+          onClose={() => {
+            setIsDeleteDialogOpen(false);
+            setDeletingRequest(null);
+          }}
+          request={deletingRequest}
+          onConfirm={async () => {
+            if (deletingRequest && onDeleteRequest) {
+              await onDeleteRequest(deletingRequest.id);
+            }
+          }}
         />
 
         <BatchPaymentDialog
