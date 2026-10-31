@@ -37,7 +37,6 @@ describe("SettingsService", () => {
         ...DEFAULT_EMAIL_SETTINGS,
         recipient_email: "financeiro@bunkyo.org.br",
         updated_at: "2026-10-31T12:00:00Z",
-        updated_by: "admin-1",
       };
 
       mockRepositoryInstance.getSettings.mockResolvedValue(storedSettings);
@@ -76,7 +75,6 @@ describe("SettingsService", () => {
         id: "settings-db-1",
         ...input,
         updated_at: "2026-10-31T12:00:00Z",
-        updated_by: "admin-1",
       };
 
       mockRepositoryInstance.upsertSettings.mockResolvedValue(savedRecord);

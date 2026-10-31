@@ -81,5 +81,5 @@ export const EmailSettingsSchema = z.object({
 
 export type EmailSettingsInput = z.infer<typeof EmailSettingsSchema>;
 
-export type EmailSettings = Database["public"]["Tables"]["email_settings"]["Row"];
-
+export type EmailSettings =
+  Database["public"]["Tables"]["email_settings"]["Row"];

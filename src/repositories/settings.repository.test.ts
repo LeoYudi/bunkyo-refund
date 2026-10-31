@@ -22,7 +22,6 @@ describe("SettingsRepository", () => {
     ...DEFAULT_EMAIL_SETTINGS,
     recipient_email: "financeiro@bunkyo.org.br",
     updated_at: "2026-10-31T12:00:00Z",
-    updated_by: "admin-1",
   };
 
   beforeEach(() => {
@@ -141,7 +140,6 @@ describe("SettingsRepository", () => {
         id: "settings-new",
         ...payload,
         updated_at: "2026-10-31T12:00:00Z",
-        updated_by: null,
       };
 
       const mockSupabase = {

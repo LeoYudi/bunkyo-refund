@@ -44,6 +44,7 @@ describe("Settings Server Actions", () => {
         id: "settings-1",
         ...DEFAULT_EMAIL_SETTINGS,
         recipient_email: "financeiro@bunkyo.org.br",
+        updated_at: "2026-10-31T12:00:00Z",
       };
 
       mockServiceInstance.getEmailSettings.mockResolvedValue(mockSettings);
