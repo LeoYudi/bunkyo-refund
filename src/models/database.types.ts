@@ -67,6 +67,7 @@ export type Database = {
           issue_number: string | null;
           issuer_cnpj: string | null;
           issuer_name: string | null;
+          raw_ai_response?: string | null;
           receipt_file_url: string;
           receiver_cnpj: string | null;
           requester_name: string;
@@ -83,6 +84,7 @@ export type Database = {
           issue_number?: string | null;
           issuer_cnpj?: string | null;
           issuer_name?: string | null;
+          raw_ai_response?: string | null;
           receipt_file_url: string;
           receiver_cnpj?: string | null;
           requester_name: string;
@@ -99,6 +101,7 @@ export type Database = {
           issue_number?: string | null;
           issuer_cnpj?: string | null;
           issuer_name?: string | null;
+          raw_ai_response?: string | null;
           receipt_file_url?: string;
           receiver_cnpj?: string | null;
           requester_name?: string;
