@@ -1,9 +1,14 @@
 "use client";
 
+import { cn } from "cn";
+import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { CalendarIcon } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 import { updateRefundRequestAction } from "@/actions/refund.actions";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +19,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import type { RefundRequest, UpdateRefundInput } from "@/models/refund.model";
 
 export interface EditRefundDialogProps {
@@ -68,6 +78,21 @@ function EditRefundDialogContent({
   const [description, setDescription] = useState(request.description || "");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const selectedDate = issueDate
+    ? parseISO(`${issueDate}T00:00:00`)
+    : undefined;
+
+  const handleDateSelect = (date: Date | undefined) => {
+    if (date) {
+      const yyyy = date.getFullYear();
+      const mm = String(date.getMonth() + 1).padStart(2, "0");
+      const dd = String(date.getDate()).padStart(2, "0");
+      setIssueDate(`${yyyy}-${mm}-${dd}`);
+    } else {
+      setIssueDate("");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -179,11 +204,41 @@ function EditRefundDialogContent({
               onChange={(e) => setTotalValue(e.target.value)}
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 flex flex-col">
             <Label htmlFor="issue_date">Data de Emissão</Label>
-            <Input
-              id="issue_date"
-              type="date"
+            <Popover>
+              <PopoverTrigger
+                render={
+                  <Button
+                    id="issue_date"
+                    type="button"
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !issueDate && "text-muted-foreground",
+                    )}
+                  />
+                }
+              >
+                <CalendarIcon className="mr-2 size-4" />
+                {selectedDate ? (
+                  format(selectedDate, "dd/MM/yyyy", { locale: ptBR })
+                ) : (
+                  <span>Selecione uma data</span>
+                )}
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={handleDateSelect}
+                  locale={ptBR}
+                />
+              </PopoverContent>
+            </Popover>
+            <input
+              type="hidden"
+              data-testid="hidden-issue-date"
               value={issueDate}
               onChange={(e) => setIssueDate(e.target.value)}
             />

@@ -66,6 +66,7 @@ describe("EditRefundDialog", () => {
     ).toBeInTheDocument();
     // total_value can be formatted as 150.5 or 150,5
     expect(screen.getByDisplayValue(/150[.,]5/)).toBeInTheDocument();
+    expect(screen.getByText("15/10/2026")).toBeInTheDocument();
   });
 
   it("should allow user to type new values into fields", () => {
