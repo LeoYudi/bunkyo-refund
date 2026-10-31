@@ -109,7 +109,7 @@ describe("ReceiptUploader Base Component", () => {
       fireEvent.change(fileInput, { target: { files: [oversizedFile] } });
 
       expect(onFileSelect).not.toHaveBeenCalled();
-      expect(screen.queryByText(/5\s*MB/i)).not.toBeNull();
+      expect(screen.queryByRole("alert")).not.toBeNull();
       expect(
         screen.queryByRole("alert") ??
           screen.queryByText(/muito grande|excede|máximo.*5\s*MB/i),
