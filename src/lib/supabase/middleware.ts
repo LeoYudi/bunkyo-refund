@@ -44,10 +44,33 @@ export async function updateSession(request: NextRequest) {
   const isAdminRoute = /^\/admin(\/|$)/.test(pathname);
   const isExcludedAdminRoute = /^\/admin-login(\/|$)/.test(pathname);
 
-  if (isAdminRoute && !isExcludedAdminRoute && !user) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
+  if (isAdminRoute && !isExcludedAdminRoute) {
+    if (!user) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      return NextResponse.redirect(url);
+    }
+
+    if (user.app_metadata?.provider === "google") {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session?.provider_token) {
+        await supabase.auth.signOut();
+        const url = request.nextUrl.clone();
+        url.pathname = "/login";
+        url.searchParams.set("reason", "google_session_expired");
+        const redirectResponse = NextResponse.redirect(url);
+        if (
+          redirectResponse.cookies &&
+          typeof supabaseResponse.cookies?.getAll === "function"
+        ) {
+          const responseCookies = supabaseResponse.cookies.getAll() ?? [];
+          for (const cookie of responseCookies) {
+            redirectResponse.cookies.set(cookie);
+          }
+        }
+        return redirectResponse;
+      }
+    }
   }
 
   return supabaseResponse;

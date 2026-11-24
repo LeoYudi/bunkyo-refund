@@ -7,6 +7,7 @@ import {
   Loader2,
   MoreHorizontal,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   processBatchReceiptsAction,
@@ -50,6 +51,7 @@ export function RequestsTable({
   onConfirmBatch,
   onExportCsv,
 }: RequestsTableProps) {
+  const router = useRouter();
   const [selectedReceiptUrl, setSelectedReceiptUrl] = useState<string | null>(
     null,
   );
@@ -179,6 +181,14 @@ export function RequestsTable({
           const sentIds = selectedReqs.map((r) => r.id);
           setSelectedIds((prev) => prev.filter((id) => !sentIds.includes(id)));
         } else {
+          if (result.sessionExpired) {
+            setErrorMessage(
+              result.error ||
+                "Sessão do Google expirada. Faça login novamente.",
+            );
+            router.push("/login?reason=google_session_expired");
+            return;
+          }
           setErrorMessage(result.error || "Erro ao enviar pagamentos em lote");
           throw new Error(result.error || "Erro ao enviar pagamentos em lote");
         }

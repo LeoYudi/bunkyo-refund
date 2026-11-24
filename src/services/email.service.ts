@@ -35,7 +35,8 @@ export async function sendBatchEmailWithGmail({
   const senderEmail = sessionData?.session?.user?.email;
 
   if (!providerToken) {
-    throw new Error(
+    await supabase.auth.signOut();
+    throw new GoogleSessionExpiredError(
       "Token de acesso do Google (Gmail) não encontrado. Faça login novamente com sua conta Google.",
     );
   }
@@ -129,6 +130,12 @@ export async function sendBatchEmailWithGmail({
 
   if (!response.ok) {
     const errorText = await response.text();
+    if (response.status === 401) {
+      await supabase.auth.signOut();
+      throw new GoogleSessionExpiredError(
+        "Sessão do Google (Gmail) expirada. Faça login novamente com sua conta Google.",
+      );
+    }
     throw new Error(
       `Falha ao enviar e-mail via Gmail API (status ${response.status}): ${errorText}`,
     );

@@ -1,9 +1,25 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { AdminLoginForm } from "@/components/forms/admin-login-form";
 import { toast } from "@/components/ui/toast";
 import { createClient } from "@/lib/supabase/client";
+
+function SessionExpiredAlert() {
+  const searchParams = useSearchParams();
+  if (searchParams.get("reason") === "google_session_expired") {
+    return (
+      <div
+        role="alert"
+        className="rounded-md bg-destructive/15 p-3 text-sm text-destructive text-center"
+      >
+        Sessão do Google expirada. Faça login novamente.
+      </div>
+    );
+  }
+  return null;
+}
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -60,6 +76,10 @@ export default function AdminLoginPage() {
             Entre com suas credenciais de administrador.
           </p>
         </div>
+
+        <Suspense fallback={null}>
+          <SessionExpiredAlert />
+        </Suspense>
 
         <AdminLoginForm onSubmit={handleLogin} />
       </div>
