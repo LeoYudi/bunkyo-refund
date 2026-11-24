@@ -4,12 +4,10 @@
 O sistema é um Dashboard Web projetado para automatizar o fluxo de pedidos de reembolso de notas fiscais. O sistema permite o upload de notas fiscais (PDFs ou Imagens), utiliza a API do Gemini para ler e extrair os dados da nota automaticamente (OCR e estruturação de dados), armazena essas informações, e por fim, emite um e-mail com os dados de reembolso para o departamento financeiro.
 
 ## Estrutura Multi-Agentes (Metodologia de Desenvolvimento)
-O sistema será desenvolvido majoritariamente de forma autônoma utilizando um time de subagentes IA, orquestrados pelo Agente principal (Tech Lead). 
-1. **Tech Lead**: Planejamento e coordenação.
-2. **Frontend Engineer**: Componentes, UI (Tailwind + Shadcn) e integrações na tela.
-3. **Backend Engineer**: Supabase (Auth, Storage, DB) e API Routes do Next.js.
-4. **AI Engineer**: Prompts de extração de dados e chamadas à API do Gemini.
-5. **QA & Security**: Testes automatizados (Vitest), testes de edge-cases, falhas de IA e segurança da informação.
+O sistema será desenvolvido majoritariamente de forma autônoma utilizando um time de subagentes IA, orquestrados pelo Agente principal (Tech Lead), com seleção de modelos otimizada por responsabilidade:
+1. **Tech Lead / Agente Principal (`Neon`)**: Planejamento, decisões arquiteturais, alinhamento com o usuário, orquestração de subagentes, Pull Requests e sincronização do Kanban no Notion.
+2. **QA & Security (`Carbon` / `inherit`)**: Testes automatizados (Vitest - TDD Red), análise profunda de requisitos, edge-cases, falhas de IA e segurança da informação.
+3. **Desenvolvedor — Frontend, Backend & AI Engineer (`Hydrogen` / `flash_lite`)**: Implementação ágil e econômica guiada pelos testes do QA (TDD Green), abrangendo componentes UI (Tailwind + Shadcn + Storybook), Supabase (Auth, Storage, DB), Server Actions e integrações com a API do Gemini.
 
 ---
 
