@@ -1,6 +1,7 @@
 import { getRefundRequestsAction } from "@/actions/refund.actions";
 import { RequestsTable } from "@/components/ui/requests-table";
 import { StatusLifecycle } from "@/components/ui/status-lifecycle";
+import { createClient } from "@/lib/supabase/server";
 
 export default async function AdminDashboardPage() {
   const result = await getRefundRequestsAction();
@@ -18,6 +19,12 @@ export default async function AdminDashboardPage() {
 
   const requests = result.data || [];
 
+  const supabase = await createClient();
+  const { data: sessionData } = await supabase.auth.getSession();
+  const canSendBatchEmail = Boolean(
+    sessionData?.session?.provider_token?.trim(),
+  );
+
   return (
     <div>
       <div className="mb-6">
@@ -33,7 +40,10 @@ export default async function AdminDashboardPage() {
       </div>
 
       <div className="bg-card border rounded-lg overflow-hidden shadow-sm">
-        <RequestsTable requests={requests} />
+        <RequestsTable
+          requests={requests}
+          canSendBatchEmail={canSendBatchEmail}
+        />
       </div>
     </div>
   );

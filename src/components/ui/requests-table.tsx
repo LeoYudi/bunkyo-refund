@@ -46,6 +46,7 @@ export interface RequestsTableProps {
 
 export function RequestsTable({
   requests,
+  canSendBatchEmail = true,
   onProcessRequest,
   onProcessBatch,
   onConfirmBatch,
@@ -240,13 +241,15 @@ export function RequestsTable({
             )}
             Aprovar para Leitura em Lote
           </Button>
-          <Button
-            type="button"
-            disabled={selectedApprovedRequests.length === 0}
-            onClick={() => setIsBatchDialogOpen(true)}
-          >
-            Enviar Pagamentos em Lote
-          </Button>
+          {canSendBatchEmail && (
+            <Button
+              type="button"
+              disabled={selectedApprovedRequests.length === 0}
+              onClick={() => setIsBatchDialogOpen(true)}
+            >
+              Enviar Pagamentos em Lote
+            </Button>
+          )}
         </div>
       </div>
 
@@ -402,12 +405,14 @@ export function RequestsTable({
           receiptUrl={selectedReceiptUrl}
         />
 
-        <BatchPaymentDialog
-          isOpen={isBatchDialogOpen}
-          onClose={() => setIsBatchDialogOpen(false)}
-          selectedRequests={selectedApprovedRequests}
-          onConfirm={handleConfirmBatch}
-        />
+        {canSendBatchEmail && (
+          <BatchPaymentDialog
+            isOpen={isBatchDialogOpen}
+            onClose={() => setIsBatchDialogOpen(false)}
+            selectedRequests={selectedApprovedRequests}
+            onConfirm={handleConfirmBatch}
+          />
+        )}
       </div>
     </div>
   );
