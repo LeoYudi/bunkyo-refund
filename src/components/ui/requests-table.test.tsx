@@ -11,6 +11,15 @@ import {
 import type { Database } from "@/models/database.types";
 import { RequestsTable } from "./requests-table";
 
+const mockPush = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: mockPush,
+    replace: vi.fn(),
+  }),
+}));
+
 vi.mock("@/actions/ai.actions", () => ({
   processReceiptAction: vi.fn(),
   processBatchReceiptsAction: vi.fn(),
@@ -854,6 +863,38 @@ describe("RequestsTable", () => {
         "financeiro@bunkyo.org.br",
         "cc@bunkyo.org.br",
         "bcc@bunkyo.org.br",
+      );
+    });
+
+    it("should redirect to /login?reason=google_session_expired without throwing when sendBatchPaymentEmailAction returns sessionExpired: true", async () => {
+      vi.mocked(sendBatchPaymentEmailAction).mockResolvedValueOnce({
+        success: false,
+        error: "Sessão do Google expirada. Faça login novamente.",
+        sessionExpired: true,
+      } as Awaited<ReturnType<typeof sendBatchPaymentEmailAction>>);
+
+      render(<RequestsTable requests={bulkMockRequests} />);
+
+      const allCheckboxes = screen.getAllByRole("checkbox");
+      const approved1Cb = allCheckboxes[2];
+      fireEvent.click(approved1Cb);
+
+      const batchPaymentButton = screen.getByRole("button", {
+        name: /enviar pagamentos em lote/i,
+      });
+      fireEvent.click(batchPaymentButton);
+
+      const confirmButton = screen.getByRole("button", {
+        name: /confirmar envio/i,
+      });
+      await act(async () => {
+        fireEvent.click(confirmButton);
+      });
+
+      expect(sendBatchPaymentEmailAction).toHaveBeenCalledTimes(1);
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      expect(mockPush).toHaveBeenCalledWith(
+        "/login?reason=google_session_expired",
       );
     });
   });

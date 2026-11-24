@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createClient } from "@/lib/supabase/server";
 import type { RefundRequest } from "@/models/refund.model";
-import { sendBatchEmailWithGmail } from "./email.service";
+import {
+  GoogleSessionExpiredError,
+  sendBatchEmailWithGmail,
+} from "./email.service";
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
@@ -30,6 +33,7 @@ describe("email.service - sendBatchEmailWithGmail", () => {
 
   const mockDownload = vi.fn();
   const mockGetSession = vi.fn();
+  const mockSignOut = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -51,9 +55,12 @@ describe("email.service - sendBatchEmailWithGmail", () => {
       error: null,
     });
 
+    mockSignOut.mockResolvedValue({ error: null });
+
     vi.mocked(createClient).mockResolvedValue({
       auth: {
         getSession: mockGetSession,
+        signOut: mockSignOut,
       },
       storage: {
         from: vi.fn().mockReturnValue({
@@ -191,5 +198,74 @@ describe("email.service - sendBatchEmailWithGmail", () => {
         date: "21/10/2026",
       }),
     ).rejects.toThrow(/gmail|403|forbidden|falha/i);
+
+    expect(mockSignOut).not.toHaveBeenCalled();
+  });
+
+  it("should call supabase.auth.signOut() and throw GoogleSessionExpiredError when session.provider_token is missing (null)", async () => {
+    mockGetSession.mockResolvedValueOnce({
+      data: {
+        session: {
+          provider_token: null,
+          user: { email: "admin@bunkyo.org.br" },
+        },
+      },
+      error: null,
+    });
+
+    await expect(
+      sendBatchEmailWithGmail({
+        requests: mockRequests,
+        recipientEmail: "financeiro@bunkyo.org.br",
+        date: "21/10/2026",
+      }),
+    ).rejects.toThrow(GoogleSessionExpiredError);
+
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("should call supabase.auth.signOut() and throw GoogleSessionExpiredError when session.provider_token is undefined", async () => {
+    mockGetSession.mockResolvedValueOnce({
+      data: {
+        session: {
+          provider_token: undefined,
+          user: { email: "admin@bunkyo.org.br" },
+        },
+      },
+      error: null,
+    });
+
+    await expect(
+      sendBatchEmailWithGmail({
+        requests: mockRequests,
+        recipientEmail: "financeiro@bunkyo.org.br",
+        date: "21/10/2026",
+      }),
+    ).rejects.toThrow(GoogleSessionExpiredError);
+
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("should call supabase.auth.signOut() and throw GoogleSessionExpiredError when Gmail API responds with status 401", async () => {
+    global.fetch = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      json: vi
+        .fn()
+        .mockResolvedValue({ error: { message: "Invalid Credentials" } }),
+      text: vi.fn().mockResolvedValue("Unauthorized"),
+    } as unknown as Response);
+
+    await expect(
+      sendBatchEmailWithGmail({
+        requests: mockRequests,
+        recipientEmail: "financeiro@bunkyo.org.br",
+        date: "21/10/2026",
+      }),
+    ).rejects.toThrow(GoogleSessionExpiredError);
+
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
   });
 });

@@ -3,6 +3,13 @@ import { RefundBatchEmail } from "@/components/emails/refund-batch-email";
 import { createClient } from "@/lib/supabase/server";
 import type { RefundRequest } from "@/models/refund.model";
 
+export class GoogleSessionExpiredError extends Error {
+  constructor(message = "Sessão do Google expirada. Faça login novamente.") {
+    super(message);
+    this.name = "GoogleSessionExpiredError";
+  }
+}
+
 export interface SendBatchEmailParams {
   requests: RefundRequest[];
   recipientEmail?: string;
