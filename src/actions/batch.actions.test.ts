@@ -1,6 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RefundRequest } from "@/models/refund.model";
+import { GoogleSessionExpiredError } from "@/services/email.service";
 import { RefundService } from "@/services/refund.service";
 import {
   exportToCsvAction,
@@ -118,6 +119,22 @@ describe("batch.actions", () => {
       expect(result).toEqual({
         success: false,
         error: "Falha ao enviar e-mail pelo Gmail",
+      });
+    });
+
+    it("should return { success: false, error, sessionExpired: true } when refundService.sendBatchPayment throws GoogleSessionExpiredError", async () => {
+      mockServiceInstance.sendBatchPayment.mockRejectedValue(
+        new GoogleSessionExpiredError(
+          "Sessão do Google expirada. Faça login novamente.",
+        ),
+      );
+
+      const result = await sendBatchPaymentEmailAction(["req-1"]);
+
+      expect(result).toEqual({
+        success: false,
+        error: expect.any(String),
+        sessionExpired: true,
       });
     });
   });
