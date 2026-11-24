@@ -856,5 +856,72 @@ describe("RequestsTable", () => {
         "bcc@bunkyo.org.br",
       );
     });
+
+    describe("canSendBatchEmail visibility", () => {
+      it("should NOT render 'Enviar Pagamentos em Lote' button or BatchPaymentDialog when canSendBatchEmail is false, even with APPROVED requests selected, while keeping 'Exportar CSV' and 'Aprovar para Leitura em Lote' visible", () => {
+        render(
+          <RequestsTable
+            requests={bulkMockRequests}
+            canSendBatchEmail={false}
+          />,
+        );
+
+        expect(
+          screen.queryByRole("button", { name: /enviar pagamentos em lote/i }),
+        ).toBeNull();
+        expect(screen.queryByRole("dialog")).toBeNull();
+
+        const exportCsvButton = screen.getByRole("button", {
+          name: /exportar csv/i,
+        });
+        const batchApproveButton = screen.getByRole("button", {
+          name: /aprovar para leitura em lote/i,
+        });
+        expect(exportCsvButton).toBeInTheDocument();
+        expect(batchApproveButton).toBeInTheDocument();
+
+        const allCheckboxes = screen.getAllByRole("checkbox");
+        fireEvent.click(allCheckboxes[2]);
+        fireEvent.click(allCheckboxes[3]);
+
+        expect(screen.getByText(/2 selecionado\(s\)/i)).toBeInTheDocument();
+        expect(
+          screen.queryByRole("button", { name: /enviar pagamentos em lote/i }),
+        ).toBeNull();
+        expect(screen.queryByRole("dialog")).toBeNull();
+        expect(exportCsvButton).toBeInTheDocument();
+        expect(exportCsvButton).not.toBeDisabled();
+        expect(batchApproveButton).toBeInTheDocument();
+      });
+
+      it("should render 'Enviar Pagamentos em Lote' button normally when canSendBatchEmail is true", () => {
+        render(
+          <RequestsTable
+            requests={bulkMockRequests}
+            canSendBatchEmail={true}
+          />,
+        );
+
+        const batchPaymentButton = screen.getByRole("button", {
+          name: /enviar pagamentos em lote/i,
+        });
+        expect(batchPaymentButton).toBeInTheDocument();
+        expect(batchPaymentButton).toBeDisabled();
+
+        const allCheckboxes = screen.getAllByRole("checkbox");
+        fireEvent.click(allCheckboxes[2]);
+
+        expect(batchPaymentButton).not.toBeDisabled();
+      });
+
+      it("should render 'Enviar Pagamentos em Lote' button by default when canSendBatchEmail is omitted", () => {
+        render(<RequestsTable requests={bulkMockRequests} />);
+
+        const batchPaymentButton = screen.getByRole("button", {
+          name: /enviar pagamentos em lote/i,
+        });
+        expect(batchPaymentButton).toBeInTheDocument();
+      });
+    });
   });
 });

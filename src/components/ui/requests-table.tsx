@@ -32,6 +32,7 @@ export type { RefundRequest };
 
 export interface RequestsTableProps {
   requests: RefundRequest[];
+  canSendBatchEmail?: boolean;
   onProcessRequest?: (requestId: string) => Promise<void> | void;
   onProcessBatch?: (requestIds: string[]) => Promise<void> | void;
   onConfirmBatch?: (
