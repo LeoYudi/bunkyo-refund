@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import type { RefundRequest } from "@/models/refund.model";
+import type { BatchEmailMetadata } from "@/services/email.service";
+import { GoogleSessionExpiredError } from "@/services/email.service";
 import { RefundService } from "@/services/refund.service";
 
 export async function sendBatchPaymentEmailAction(
@@ -9,10 +11,12 @@ export async function sendBatchPaymentEmailAction(
   recipientEmail?: string,
   cc?: string,
   bcc?: string,
+  metadata?: BatchEmailMetadata,
 ): Promise<{
   success: boolean;
   data?: RefundRequest[];
   error?: string;
+  sessionExpired?: boolean;
 }> {
   if (!requestIds || requestIds.length === 0) {
     return { success: false, error: "Nenhuma solicitação selecionada" };
@@ -21,18 +25,29 @@ export async function sendBatchPaymentEmailAction(
   try {
     const refundService = new RefundService();
     const data =
-      cc !== undefined || bcc !== undefined
+      metadata !== undefined
         ? await refundService.sendBatchPayment(
             requestIds,
             recipientEmail,
             cc,
             bcc,
+            metadata,
           )
-        : await refundService.sendBatchPayment(requestIds, recipientEmail);
+        : cc !== undefined || bcc !== undefined
+          ? await refundService.sendBatchPayment(
+              requestIds,
+              recipientEmail,
+              cc,
+              bcc,
+            )
+          : await refundService.sendBatchPayment(requestIds, recipientEmail);
     revalidatePath("/admin");
     return { success: true, data };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    if (error instanceof GoogleSessionExpiredError) {
+      return { success: false, error: errorMessage, sessionExpired: true };
+    }
     return { success: false, error: errorMessage };
   }
 }

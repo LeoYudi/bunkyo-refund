@@ -5,7 +5,10 @@ import type { Database } from "@/models/database.types";
 import type { CreateRefundSchema, RefundRequest } from "@/models/refund.model";
 import { RefundRepository } from "@/repositories/refund.repository";
 import { processReceiptWithAI } from "@/services/ai.service";
-import { sendBatchEmailWithGmail } from "@/services/email.service";
+import {
+  type BatchEmailMetadata,
+  sendBatchEmailWithGmail,
+} from "@/services/email.service";
 
 export class RefundService {
   private repository: RefundRepository;
@@ -74,6 +77,24 @@ export class RefundService {
       }
 
       const extractedData = await processReceiptWithAI(storagePath, mimeType);
+
+      const hasRequiredFields =
+        Boolean(extractedData.issuer_name?.trim()) &&
+        Boolean(extractedData.issuer_cnpj?.trim()) &&
+        Boolean(extractedData.issue_date?.trim()) &&
+        typeof extractedData.total_value === "number" &&
+        extractedData.total_value > 0;
+
+      if (!hasRequiredFields) {
+        await this.repository.update(requestId, {
+          raw_ai_response: extractedData.raw_ai_response,
+          status: "PENDING",
+        });
+        throw new Error(
+          "Não foi possível extrair todas as informações obrigatórias da nota fiscal (Emissor, CNPJ, Data de Emissão e Valor Total). Verifique se o arquivo enviado é uma nota fiscal válida.",
+        );
+      }
+
       return await this.repository.update(requestId, {
         ...extractedData,
         status: "APPROVED",
@@ -114,6 +135,7 @@ export class RefundService {
     recipientEmail?: string,
     cc?: string,
     bcc?: string,
+    metadata?: BatchEmailMetadata,
   ): Promise<RefundRequest[]> {
     if (!requestIds || requestIds.length === 0) {
       throw new Error("Nenhuma solicitação selecionada");
@@ -134,6 +156,7 @@ export class RefundService {
       ...(cc !== undefined ? { cc } : {}),
       ...(bcc !== undefined ? { bcc } : {}),
       date: new Date().toLocaleDateString("pt-BR"),
+      ...metadata,
     });
 
     const updatedRequests: RefundRequest[] = [];

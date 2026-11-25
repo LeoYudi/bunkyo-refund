@@ -3,7 +3,24 @@ import { RefundBatchEmail } from "@/components/emails/refund-batch-email";
 import { createClient } from "@/lib/supabase/server";
 import type { RefundRequest } from "@/models/refund.model";
 
-export interface SendBatchEmailParams {
+export interface BatchEmailMetadata {
+  subject?: string;
+  eventDescription?: string;
+  approverEmail?: string;
+  pixByRequester?: Record<string, string>;
+  senderName?: string;
+  senderRole?: string;
+  senderEmail?: string;
+  senderPhone?: string;
+}
+export class GoogleSessionExpiredError extends Error {
+  constructor(message = "Sessão do Google expirada. Faça login novamente.") {
+    super(message);
+    this.name = "GoogleSessionExpiredError";
+  }
+}
+
+export interface SendBatchEmailParams extends BatchEmailMetadata {
   requests: RefundRequest[];
   recipientEmail?: string;
   cc?: string;
@@ -21,6 +38,14 @@ export async function sendBatchEmailWithGmail({
   cc,
   bcc,
   date,
+  subject,
+  eventDescription,
+  approverEmail,
+  pixByRequester,
+  senderName,
+  senderRole,
+  senderEmail: customSenderEmail,
+  senderPhone,
 }: SendBatchEmailParams): Promise<SendBatchEmailResult> {
   const supabase = await createClient();
   const { data: sessionData } = await supabase.auth.getSession();
@@ -28,7 +53,8 @@ export async function sendBatchEmailWithGmail({
   const senderEmail = sessionData?.session?.user?.email;
 
   if (!providerToken) {
-    throw new Error(
+    await supabase.auth.signOut();
+    throw new GoogleSessionExpiredError(
       "Token de acesso do Google (Gmail) não encontrado. Faça login novamente com sua conta Google.",
     );
   }
@@ -72,7 +98,19 @@ export async function sendBatchEmailWithGmail({
     }
   }
 
-  const htmlBody = await render(RefundBatchEmail({ date, requests }));
+  const htmlBody = await render(
+    RefundBatchEmail({
+      date,
+      requests,
+      eventDescription,
+      approverEmail,
+      pixByRequester,
+      senderName,
+      senderRole,
+      senderEmail: customSenderEmail,
+      senderPhone,
+    }),
+  );
   const boundary = `batch_boundary_${Date.now()}`;
 
   let mimeMessage = "";
@@ -84,9 +122,8 @@ export async function sendBatchEmailWithGmail({
   if (bcc?.trim()) {
     mimeMessage += `Bcc: ${bcc.trim()}\r\n`;
   }
-  const subjectEncoded = Buffer.from(`Pedido de Reembolsos - ${date}`).toString(
-    "base64",
-  );
+  const resolvedSubject = subject?.trim() || `Reembolso CJB - ${date}`;
+  const subjectEncoded = Buffer.from(resolvedSubject).toString("base64");
   mimeMessage += `Subject: =?UTF-8?B?${subjectEncoded}?=\r\n`;
   mimeMessage += `MIME-Version: 1.0\r\n`;
   mimeMessage += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`;
@@ -122,6 +159,12 @@ export async function sendBatchEmailWithGmail({
 
   if (!response.ok) {
     const errorText = await response.text();
+    if (response.status === 401) {
+      await supabase.auth.signOut();
+      throw new GoogleSessionExpiredError(
+        "Sessão do Google (Gmail) expirada. Faça login novamente com sua conta Google.",
+      );
+    }
     throw new Error(
       `Falha ao enviar e-mail via Gmail API (status ${response.status}): ${errorText}`,
     );

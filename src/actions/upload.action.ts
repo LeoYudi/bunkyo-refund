@@ -9,6 +9,11 @@ export async function uploadReceipt(formData: FormData): Promise<string> {
     throw new Error("No file provided");
   }
 
+  const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    throw new Error("O arquivo excede o tamanho máximo permitido de 5MB");
+  }
+
   const supabase = await createClient();
 
   const fileExt = file.name.split(".").pop();

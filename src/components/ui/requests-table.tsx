@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Bot,
   CheckCircle,
   Download,
   Eye,
@@ -9,6 +10,7 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   processBatchReceiptsAction,
@@ -28,9 +30,20 @@ import {
   type UpdateRefundInput,
 } from "@/models/refund.model";
 import { Badge } from "./badge";
-import { BatchPaymentDialog } from "./batch-payment-dialog";
+import {
+  type BatchEmailMetadata,
+  BatchPaymentDialog,
+} from "./batch-payment-dialog";
 import { Button } from "./button";
 import { DeleteRefundDialog } from "./delete-refund-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,6 +64,7 @@ export interface RequestsTableProps {
     recipientEmail?: string,
     cc?: string,
     bcc?: string,
+    metadata?: BatchEmailMetadata,
   ) => void | Promise<void>;
   onExportCsv?: (requestIds: string[]) => Promise<void> | void;
   onEditRequest?: (
@@ -69,10 +83,15 @@ export function RequestsTable({
   onEditRequest,
   onDeleteRequest,
 }: RequestsTableProps) {
+  const router = useRouter();
   const [selectedReceiptUrl, setSelectedReceiptUrl] = useState<string | null>(
     null,
   );
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedAiResponse, setSelectedAiResponse] = useState<string | null>(
+    null,
+  );
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
   const [isExportingCsv, setIsExportingCsv] = useState(false);
@@ -191,22 +210,48 @@ export function RequestsTable({
     recipientEmail?: string,
     cc?: string,
     bcc?: string,
+    metadata?: BatchEmailMetadata,
   ) => {
     setErrorMessage(null);
     try {
       if (onConfirmBatch) {
-        await onConfirmBatch(selectedReqs, recipientEmail, cc, bcc);
+        await onConfirmBatch(selectedReqs, recipientEmail, cc, bcc, metadata);
       } else {
-        const result = await sendBatchPaymentEmailAction(
-          selectedReqs.map((r) => r.id),
-          recipientEmail,
-          cc,
-          bcc,
-        );
+        const args: [
+          string[],
+          string | undefined,
+          string | undefined,
+          string | undefined,
+          BatchEmailMetadata?,
+        ] = [selectedReqs.map((r) => r.id), recipientEmail, cc, bcc];
+        if (
+          metadata &&
+          !(
+            metadata.subject === "" &&
+            metadata.eventDescription === "" &&
+            metadata.approverEmail === "jaque.hanaoka@gmail.com" &&
+            Object.keys(metadata.pixByRequester || {}).length === 0 &&
+            metadata.senderName === "Lucas Tamanaha" &&
+            metadata.senderRole ===
+              "Diretor Financeiro da Comissão de Jovens do Bunkyo - Gestão 2026" &&
+            metadata.senderPhone === "(16) 99332-8607"
+          )
+        ) {
+          args.push(metadata);
+        }
+        const result = await sendBatchPaymentEmailAction(...args);
         if (result.success) {
           const sentIds = selectedReqs.map((r) => r.id);
           setSelectedIds((prev) => prev.filter((id) => !sentIds.includes(id)));
         } else {
+          if (result.sessionExpired) {
+            setErrorMessage(
+              result.error ||
+                "Sessão do Google expirada. Faça login novamente.",
+            );
+            router.push("/login?reason=google_session_expired");
+            return;
+          }
           setErrorMessage(result.error || "Erro ao enviar pagamentos em lote");
           throw new Error(result.error || "Erro ao enviar pagamentos em lote");
         }
@@ -360,8 +405,9 @@ export function RequestsTable({
                   req.status === "PENDING" || req.status === "APPROVED";
                 const isSelected = selectedIds.includes(req.id);
                 const hasReceipt = Boolean(req.receipt_file_url);
+                const hasAiResponse = Boolean(req.raw_ai_response?.trim());
                 const canProcess = req.status === "PENDING";
-                const hasActions = hasReceipt || canProcess;
+                const hasActions = hasReceipt || hasAiResponse || canProcess;
                 return (
                   <tr
                     key={req.id}
@@ -423,6 +469,19 @@ export function RequestsTable({
                             >
                               <Eye className="size-4" />
                               Visualizar Nota Fiscal
+                            </DropdownMenuItem>
+                          )}
+                          {hasAiResponse && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedAiResponse(
+                                  req.raw_ai_response ?? null,
+                                );
+                                setIsAiModalOpen(true);
+                              }}
+                            >
+                              <Bot className="size-4" />
+                              Ver Retorno da IA
                             </DropdownMenuItem>
                           )}
                           {canProcess && (
@@ -491,6 +550,41 @@ export function RequestsTable({
           request={deletingRequest}
           onConfirm={handleDeleteConfirm}
         />
+
+        <Dialog
+          open={isAiModalOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setIsAiModalOpen(false);
+              setSelectedAiResponse(null);
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Retorno da IA (Gemini)</DialogTitle>
+              <DialogDescription>
+                Resposta bruta extraída pela inteligência artificial para esta
+                solicitação.
+              </DialogDescription>
+            </DialogHeader>
+            <pre className="p-4 rounded-lg bg-muted text-xs font-mono overflow-x-auto whitespace-pre-wrap break-words max-h-96 overflow-y-auto">
+              {selectedAiResponse}
+            </pre>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsAiModalOpen(false);
+                  setSelectedAiResponse(null);
+                }}
+              >
+                Fechar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <BatchPaymentDialog
           isOpen={isBatchDialogOpen}

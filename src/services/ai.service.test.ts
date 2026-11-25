@@ -104,7 +104,7 @@ describe("ai.service.ts - processReceiptWithAI", () => {
     expect(mockStorage.from).toHaveBeenCalledWith("receipts");
     expect(mockStorage.download).toHaveBeenCalledWith("receipts/123.jpg");
 
-    expect(GoogleGenAI).toHaveBeenCalledWith({});
+    expect(GoogleGenAI).toHaveBeenCalledWith({ apiVersion: "v1beta" });
 
     const expectedBase64 = Buffer.from(mockFileBuffer).toString("base64");
 
@@ -126,7 +126,10 @@ describe("ai.service.ts - processReceiptWithAI", () => {
       }),
     );
 
-    expect(result).toEqual(mockAiResponse);
+    expect(result).toEqual({
+      ...mockAiResponse,
+      raw_ai_response: JSON.stringify(mockAiResponse),
+    });
   });
 
   it("should throw an error if Supabase download fails (e.g. RLS)", async () => {
@@ -193,6 +196,8 @@ describe("ai.service.ts - processReceiptWithAI", () => {
     });
 
     await processReceiptWithAI("receipts/123.pdf", "application/pdf");
+
+    expect(GoogleGenAI).toHaveBeenCalledWith({ apiVersion: "v1beta" });
 
     const expectedBase64 = Buffer.from(mockFileBuffer).toString("base64");
 

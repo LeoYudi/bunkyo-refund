@@ -11,6 +11,15 @@ import {
 import type { Database } from "@/models/database.types";
 import { RequestsTable } from "./requests-table";
 
+const mockPush = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: mockPush,
+    replace: vi.fn(),
+  }),
+}));
+
 vi.mock("@/actions/ai.actions", () => ({
   processReceiptAction: vi.fn(),
   processBatchReceiptsAction: vi.fn(),
@@ -167,6 +176,55 @@ describe("RequestsTable", () => {
       const iframe = screen.getByTitle("Comprovante") as HTMLIFrameElement;
       expect(iframe).toBeInTheDocument();
       expect(iframe.src).toBe("http://example.com/alice.pdf");
+    });
+
+    it("should show 'Ver Retorno da IA' in the 3-dots menu when raw_ai_response is present and open a modal with its content on click", () => {
+      const rawJson = '{"issuer_name": null, "total_value": null}';
+      const requestsWithAiResponse: RefundRequest[] = [
+        {
+          ...mockRequests[0],
+          raw_ai_response: rawJson,
+        },
+      ];
+
+      render(<RequestsTable requests={requestsWithAiResponse} />);
+
+      const actionButton = screen.getByRole("button", {
+        name: /abrir menu|ações/i,
+      });
+      fireEvent.click(actionButton);
+
+      const viewAiResponseOption = screen.getByRole("menuitem", {
+        name: /ver retorno da ia/i,
+      });
+      expect(viewAiResponseOption).toBeInTheDocument();
+
+      fireEvent.click(viewAiResponseOption);
+
+      const dialog = screen.getByRole("dialog");
+      expect(dialog).toBeInTheDocument();
+      expect(screen.getByText(/retorno da ia \(gemini\)/i)).toBeInTheDocument();
+      expect(screen.getByText(rawJson)).toBeInTheDocument();
+    });
+
+    it("should NOT show 'Ver Retorno da IA' in the 3-dots menu when raw_ai_response is null or empty", () => {
+      const requestsWithoutAiResponse: RefundRequest[] = [
+        {
+          ...mockRequests[0],
+          raw_ai_response: null,
+        },
+      ];
+
+      render(<RequestsTable requests={requestsWithoutAiResponse} />);
+
+      const actionButton = screen.getByRole("button", {
+        name: /abrir menu|ações/i,
+      });
+      fireEvent.click(actionButton);
+
+      expect(
+        screen.queryByRole("menuitem", { name: /ver retorno da ia/i }),
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -854,6 +912,38 @@ describe("RequestsTable", () => {
         "financeiro@bunkyo.org.br",
         "cc@bunkyo.org.br",
         "bcc@bunkyo.org.br",
+      );
+    });
+
+    it("should redirect to /login?reason=google_session_expired without throwing when sendBatchPaymentEmailAction returns sessionExpired: true", async () => {
+      vi.mocked(sendBatchPaymentEmailAction).mockResolvedValueOnce({
+        success: false,
+        error: "Sessão do Google expirada. Faça login novamente.",
+        sessionExpired: true,
+      } as Awaited<ReturnType<typeof sendBatchPaymentEmailAction>>);
+
+      render(<RequestsTable requests={bulkMockRequests} />);
+
+      const allCheckboxes = screen.getAllByRole("checkbox");
+      const approved1Cb = allCheckboxes[2];
+      fireEvent.click(approved1Cb);
+
+      const batchPaymentButton = screen.getByRole("button", {
+        name: /enviar pagamentos em lote/i,
+      });
+      fireEvent.click(batchPaymentButton);
+
+      const confirmButton = screen.getByRole("button", {
+        name: /confirmar envio/i,
+      });
+      await act(async () => {
+        fireEvent.click(confirmButton);
+      });
+
+      expect(sendBatchPaymentEmailAction).toHaveBeenCalledTimes(1);
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      expect(mockPush).toHaveBeenCalledWith(
+        "/login?reason=google_session_expired",
       );
     });
   });

@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createClient } from "@/lib/supabase/server";
 import type { RefundRequest } from "@/models/refund.model";
-import { sendBatchEmailWithGmail } from "./email.service";
+import {
+  GoogleSessionExpiredError,
+  sendBatchEmailWithGmail,
+} from "./email.service";
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
@@ -30,6 +33,7 @@ describe("email.service - sendBatchEmailWithGmail", () => {
 
   const mockDownload = vi.fn();
   const mockGetSession = vi.fn();
+  const mockSignOut = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -51,9 +55,12 @@ describe("email.service - sendBatchEmailWithGmail", () => {
       error: null,
     });
 
+    mockSignOut.mockResolvedValue({ error: null });
+
     vi.mocked(createClient).mockResolvedValue({
       auth: {
         getSession: mockGetSession,
+        signOut: mockSignOut,
       },
       storage: {
         from: vi.fn().mockReturnValue({
@@ -107,7 +114,38 @@ describe("email.service - sendBatchEmailWithGmail", () => {
     expect(decodedMime).not.toContain("Cc:");
     expect(decodedMime).not.toContain("Bcc:");
 
+    const expectedDefaultSubject = Buffer.from(
+      "Reembolso CJB - 21/10/2026",
+    ).toString("base64");
+    expect(decodedMime).toContain(
+      `Subject: =?UTF-8?B?${expectedDefaultSubject}?=\r\n`,
+    );
+
     expect(result).toEqual({ messageId: "gmail-msg-123" });
+  });
+
+  it("should encode custom subject in the MIME Subject header when subject is provided", async () => {
+    await sendBatchEmailWithGmail({
+      requests: mockRequests,
+      recipientEmail: "financeiro@bunkyo.org.br",
+      date: "21/10/2026",
+      subject: "Reembolso CJB - DFI 2026",
+    });
+
+    const fetchCallArgs = vi.mocked(global.fetch).mock.calls[0];
+    const parsedBody = JSON.parse(fetchCallArgs[1]?.body as string) as {
+      raw: string;
+    };
+    const decodedMime = Buffer.from(parsedBody.raw, "base64url").toString(
+      "utf-8",
+    );
+
+    const expectedCustomSubject = Buffer.from(
+      "Reembolso CJB - DFI 2026",
+    ).toString("base64");
+    expect(decodedMime).toContain(
+      `Subject: =?UTF-8?B?${expectedCustomSubject}?=\r\n`,
+    );
   });
 
   it("should include Cc and Bcc headers in the raw MIME message when cc and bcc are provided", async () => {
@@ -191,5 +229,74 @@ describe("email.service - sendBatchEmailWithGmail", () => {
         date: "21/10/2026",
       }),
     ).rejects.toThrow(/gmail|403|forbidden|falha/i);
+
+    expect(mockSignOut).not.toHaveBeenCalled();
+  });
+
+  it("should call supabase.auth.signOut() and throw GoogleSessionExpiredError when session.provider_token is missing (null)", async () => {
+    mockGetSession.mockResolvedValueOnce({
+      data: {
+        session: {
+          provider_token: null,
+          user: { email: "admin@bunkyo.org.br" },
+        },
+      },
+      error: null,
+    });
+
+    await expect(
+      sendBatchEmailWithGmail({
+        requests: mockRequests,
+        recipientEmail: "financeiro@bunkyo.org.br",
+        date: "21/10/2026",
+      }),
+    ).rejects.toThrow(GoogleSessionExpiredError);
+
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("should call supabase.auth.signOut() and throw GoogleSessionExpiredError when session.provider_token is undefined", async () => {
+    mockGetSession.mockResolvedValueOnce({
+      data: {
+        session: {
+          provider_token: undefined,
+          user: { email: "admin@bunkyo.org.br" },
+        },
+      },
+      error: null,
+    });
+
+    await expect(
+      sendBatchEmailWithGmail({
+        requests: mockRequests,
+        recipientEmail: "financeiro@bunkyo.org.br",
+        date: "21/10/2026",
+      }),
+    ).rejects.toThrow(GoogleSessionExpiredError);
+
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("should call supabase.auth.signOut() and throw GoogleSessionExpiredError when Gmail API responds with status 401", async () => {
+    global.fetch = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      json: vi
+        .fn()
+        .mockResolvedValue({ error: { message: "Invalid Credentials" } }),
+      text: vi.fn().mockResolvedValue("Unauthorized"),
+    } as unknown as Response);
+
+    await expect(
+      sendBatchEmailWithGmail({
+        requests: mockRequests,
+        recipientEmail: "financeiro@bunkyo.org.br",
+        date: "21/10/2026",
+      }),
+    ).rejects.toThrow(GoogleSessionExpiredError);
+
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
   });
 });
