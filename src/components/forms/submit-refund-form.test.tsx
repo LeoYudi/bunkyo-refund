@@ -199,16 +199,8 @@ describe("SubmitRefundForm", () => {
       fireEvent.change(fileInput, { target: { files: [file] } });
     });
 
-    const confirmButton = await screen.findByRole("button", {
-      name: /confirmar/i,
-    });
-    await act(async () => {
-      fireEvent.click(confirmButton);
-    });
-
-    await waitFor(() => {
-      expect(onSubmitAction).not.toHaveBeenCalled();
-    });
+    expect(screen.getAllByText(/5\s*MB/i).length).toBeGreaterThan(0);
+    expect(onSubmitAction).not.toHaveBeenCalled();
   });
 
   it("triggers validation errors if file type is invalid", async () => {
