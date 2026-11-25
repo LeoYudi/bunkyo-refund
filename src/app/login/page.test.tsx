@@ -50,4 +50,26 @@ describe("AdminLoginPage", () => {
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
+
+  it("should render a visible alert when search param error=unauthorized_email is present", () => {
+    mockUseSearchParams.mockReturnValue(
+      new URLSearchParams("error=unauthorized_email"),
+    );
+
+    render(<AdminLoginPage />);
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toBeVisible();
+    expect(alert.textContent).toMatch(
+      /não autorizado|bunkyo\.org\.br|acesso negado|acesso restrito/i,
+    );
+  });
+
+  it("should not render an alert for unrelated error search param values", () => {
+    mockUseSearchParams.mockReturnValue(new URLSearchParams("error=other"));
+
+    render(<AdminLoginPage />);
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
 });
