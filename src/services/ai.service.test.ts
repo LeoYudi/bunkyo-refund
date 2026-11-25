@@ -104,7 +104,7 @@ describe("ai.service.ts - processReceiptWithAI", () => {
     expect(mockStorage.from).toHaveBeenCalledWith("receipts");
     expect(mockStorage.download).toHaveBeenCalledWith("receipts/123.jpg");
 
-    expect(GoogleGenAI).toHaveBeenCalledWith({});
+    expect(GoogleGenAI).toHaveBeenCalledWith({ apiVersion: "v1beta" });
 
     const expectedBase64 = Buffer.from(mockFileBuffer).toString("base64");
 
@@ -193,6 +193,8 @@ describe("ai.service.ts - processReceiptWithAI", () => {
     });
 
     await processReceiptWithAI("receipts/123.pdf", "application/pdf");
+
+    expect(GoogleGenAI).toHaveBeenCalledWith({ apiVersion: "v1beta" });
 
     const expectedBase64 = Buffer.from(mockFileBuffer).toString("base64");
 
