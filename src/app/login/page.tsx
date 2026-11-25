@@ -18,6 +18,17 @@ function SessionExpiredAlert() {
       </div>
     );
   }
+  if (searchParams.get("error") === "unauthorized_email") {
+    return (
+      <div
+        role="alert"
+        className="rounded-md bg-destructive/15 p-3 text-sm text-destructive text-center"
+      >
+        Acesso negado: apenas e-mails do domínio @bunkyo.org.br ou contas
+        autorizadas podem acessar o painel.
+      </div>
+    );
+  }
   return null;
 }
 

@@ -102,7 +102,9 @@ describe("Middleware (updateSession)", () => {
   });
 
   it("should allow access to /admin when session exists", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "123" } } });
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "123", email: "admin@bunkyo.org.br" } },
+    });
 
     const request = createMockRequest("/admin/dashboard");
 
@@ -148,6 +150,7 @@ describe("Middleware (updateSession)", () => {
       data: {
         user: {
           id: "123",
+          email: "admin@bunkyo.org.br",
           app_metadata: { provider: "google" },
         },
       },
@@ -180,6 +183,7 @@ describe("Middleware (updateSession)", () => {
       data: {
         user: {
           id: "123",
+          email: "admin@bunkyo.org.br",
           app_metadata: { provider: "google" },
         },
       },
@@ -212,6 +216,7 @@ describe("Middleware (updateSession)", () => {
       data: {
         user: {
           id: "123",
+          email: "admin@bunkyo.org.br",
           app_metadata: { provider: "google" },
         },
       },
@@ -240,6 +245,7 @@ describe("Middleware (updateSession)", () => {
       data: {
         user: {
           id: "123",
+          email: "admin@bunkyo.org.br",
           app_metadata: { provider: "email" },
         },
       },
@@ -261,5 +267,102 @@ describe("Middleware (updateSession)", () => {
 
     expect(response.type).toBe("next");
     expect(mockSignOut).not.toHaveBeenCalled();
+  });
+
+  it("should allow access to /admin/dashboard when logged-in user has exception email lyhiguti@gmail.com", async () => {
+    mockGetUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "123",
+          email: "lyhiguti@gmail.com",
+        },
+      },
+    });
+
+    const request = createMockRequest("/admin/dashboard");
+
+    const response = (await updateSession(request)) as unknown as {
+      type: string;
+      url?: URL;
+    };
+
+    expect(response.type).toBe("next");
+    expect(mockSignOut).not.toHaveBeenCalled();
+  });
+
+  it("should sign out and redirect to /login?error=unauthorized_email when accessing /admin with unauthorized email", async () => {
+    mockGetUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "123",
+          email: "outro@gmail.com",
+        },
+      },
+    });
+
+    const request = createMockRequest("/admin");
+
+    const response = (await updateSession(request)) as unknown as {
+      type: string;
+      url?: URL;
+    };
+
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+    expect(response.type).toBe("redirect");
+    expect(response.url?.pathname).toBe("/login");
+    expect(response.url?.searchParams.get("error")).toBe("unauthorized_email");
+  });
+
+  it("should sign out and redirect to /login?error=unauthorized_email when accessing /admin/dashboard with unauthorized Google email", async () => {
+    mockGetUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "123",
+          email: "outro@gmail.com",
+          app_metadata: { provider: "google" },
+        },
+      },
+    });
+    mockGetSession.mockResolvedValue({
+      data: {
+        session: {
+          provider_token: "valid-token",
+        },
+      },
+    });
+
+    const request = createMockRequest("/admin/dashboard");
+
+    const response = (await updateSession(request)) as unknown as {
+      type: string;
+      url?: URL;
+    };
+
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+    expect(response.type).toBe("redirect");
+    expect(response.url?.pathname).toBe("/login");
+    expect(response.url?.searchParams.get("error")).toBe("unauthorized_email");
+  });
+
+  it("should sign out and redirect to /login?error=unauthorized_email when accessing /admin with missing user email", async () => {
+    mockGetUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "123",
+        },
+      },
+    });
+
+    const request = createMockRequest("/admin");
+
+    const response = (await updateSession(request)) as unknown as {
+      type: string;
+      url?: URL;
+    };
+
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+    expect(response.type).toBe("redirect");
+    expect(response.url?.pathname).toBe("/login");
+    expect(response.url?.searchParams.get("error")).toBe("unauthorized_email");
   });
 });

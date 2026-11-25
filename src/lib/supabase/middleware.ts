@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
+import { isAllowedAdminEmail } from "@/lib/auth/allowed-emails";
 import type { Database } from "@/models/database.types";
 
 export async function updateSession(request: NextRequest) {
@@ -49,6 +50,24 @@ export async function updateSession(request: NextRequest) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
       return NextResponse.redirect(url);
+    }
+
+    if (!isAllowedAdminEmail(user.email)) {
+      await supabase.auth.signOut();
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.searchParams.set("error", "unauthorized_email");
+      const redirectResponse = NextResponse.redirect(url);
+      if (
+        redirectResponse.cookies &&
+        typeof supabaseResponse.cookies?.getAll === "function"
+      ) {
+        const responseCookies = supabaseResponse.cookies.getAll() ?? [];
+        for (const cookie of responseCookies) {
+          redirectResponse.cookies.set(cookie);
+        }
+      }
+      return redirectResponse;
     }
 
     if (user.app_metadata?.provider === "google") {
