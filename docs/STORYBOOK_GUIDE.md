@@ -46,6 +46,7 @@ export const Default: Story = {
 É fundamental que **páginas inteiras** (`page.tsx`) e **formulários complexos** (ex: `submit-refund-form.tsx`) também sejam documentados no Storybook. Isso permite visualização e testes de fluxos sem depender de um banco de dados rodando.
 
 ### Regras para Formulários
+
 - Agrupe formulários usando a hierarquia `title: "Forms/[NomeDoForm]"`.
 - Crie cenários (Stories) que representem o sucesso e as potenciais falhas de conexão simulando as `Server Actions` com atrasos artificiais (`setTimeout`).
 
@@ -62,6 +63,7 @@ export const WithServerError: Story = {
 ```
 
 ### Regras para Páginas
+
 - Agrupe páginas usando a hierarquia `title: "Pages/[NomeDaPagina]"`.
 - Utilize `parameters: { layout: "fullscreen" }` para que a visualização da página não sofra padding das margens do Storybook.
 
