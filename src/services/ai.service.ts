@@ -20,7 +20,7 @@ export async function processReceiptWithAI(
 
   const fileInputType = mimeType.startsWith("image/") ? "image" : "document";
 
-  const ai = new GoogleGenAI({});
+  const ai = new GoogleGenAI({ apiVersion: "v1beta" });
 
   const interaction = await ai.interactions.create({
     model: "gemini-3.8-flash",

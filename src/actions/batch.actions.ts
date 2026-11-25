@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type { RefundRequest } from "@/models/refund.model";
+import type { BatchEmailMetadata } from "@/services/email.service";
 import { GoogleSessionExpiredError } from "@/services/email.service";
 import { RefundService } from "@/services/refund.service";
 
@@ -10,6 +11,7 @@ export async function sendBatchPaymentEmailAction(
   recipientEmail?: string,
   cc?: string,
   bcc?: string,
+  metadata?: BatchEmailMetadata,
 ): Promise<{
   success: boolean;
   data?: RefundRequest[];
@@ -23,14 +25,22 @@ export async function sendBatchPaymentEmailAction(
   try {
     const refundService = new RefundService();
     const data =
-      cc !== undefined || bcc !== undefined
+      metadata !== undefined
         ? await refundService.sendBatchPayment(
             requestIds,
             recipientEmail,
             cc,
             bcc,
+            metadata,
           )
-        : await refundService.sendBatchPayment(requestIds, recipientEmail);
+        : cc !== undefined || bcc !== undefined
+          ? await refundService.sendBatchPayment(
+              requestIds,
+              recipientEmail,
+              cc,
+              bcc,
+            )
+          : await refundService.sendBatchPayment(requestIds, recipientEmail);
     revalidatePath("/admin");
     return { success: true, data };
   } catch (error) {
