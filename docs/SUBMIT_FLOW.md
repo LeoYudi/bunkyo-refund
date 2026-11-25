@@ -1,7 +1,8 @@
 # Fluxo de Submissão de Reembolso (`/submit`)
 
 ## 1. Visão Geral
-A rota `/submit` é a página pública onde o solicitante (sem necessidade de login) envia seu pedido de reembolso. Ela deve ser simples, "mobile-first", e ter o objetivo de coletar o nome de quem receberá o reembolso e o arquivo do comprovante (PDF ou Imagem). 
+
+A rota `/submit` é a página pública onde o solicitante (sem necessidade de login) envia seu pedido de reembolso. Ela deve ser simples, "mobile-first", e ter o objetivo de coletar o nome de quem receberá o reembolso e o arquivo do comprovante (PDF ou Imagem).
 
 Conforme definido no PRD, os arquivos devem ter no máximo 5MB e possuir extensão `.pdf`, `.png`, `.jpg` ou `.jpeg`.
 
@@ -33,19 +34,29 @@ No banco de dados e nos serviços, utilizamos o `CreateRefundSchema` da camada d
 Por isso, precisamos de um **Schema exclusivo para o Formulário do Frontend**, garantindo a validação da extensão e do peso do arquivo.
 
 **Exemplo de Frontend Schema:**
+
 ```typescript
 import { z } from "zod";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-const ACCEPTED_FILE_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/jpg"];
+const ACCEPTED_FILE_TYPES = [
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+];
 
 export const SubmitRefundFormSchema = z.object({
   requester_name: z.string().min(2, "O nome deve ter pelo menos 2 caracteres."),
-  file: z.instanceof(File, { message: "O comprovante é obrigatório." })
-    .refine((file) => file.size <= MAX_FILE_SIZE, "O arquivo deve ter no máximo 5MB.")
+  file: z
+    .instanceof(File, { message: "O comprovante é obrigatório." })
+    .refine(
+      (file) => file.size <= MAX_FILE_SIZE,
+      "O arquivo deve ter no máximo 5MB.",
+    )
     .refine(
       (file) => ACCEPTED_FILE_TYPES.includes(file.type),
-      "Formato inválido. Envie PDF, PNG ou JPG."
+      "Formato inválido. Envie PDF, PNG ou JPG.",
     ),
 });
 ```
@@ -87,9 +98,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 export default function SubmitPage() {
   const form = useForm({
     resolver: zodResolver(SubmitRefundFormSchema),
-    defaultValues: { requester_name: "" }
+    defaultValues: { requester_name: "" },
   });
-  
+
   const file = form.watch("file");
 
   const onSubmit = async (data) => {
@@ -97,52 +108,58 @@ export default function SubmitPage() {
       const formData = new FormData();
       formData.append("requester_name", data.requester_name);
       formData.append("file", data.file);
-      
+
       // Chamada Server Action (Atenção: Tratar states de loading)
       const res = await createRefundAction(formData);
-      
-      if(res.success) {
+
+      if (res.success) {
         // Redireciona para /submit/success ou exibe Toast
       }
     } catch (error) {
-       // Tratar mensagens de erro do servidor
+      // Tratar mensagens de erro do servidor
     }
   };
 
   return (
     <div className="max-w-md mx-auto p-4 space-y-6">
       <header>
-         <h1 className="text-2xl font-bold">Solicitar Reembolso</h1>
+        <h1 className="text-2xl font-bold">Solicitar Reembolso</h1>
       </header>
 
       <form className="space-y-6">
-         {/* Input Nome */}
-         <div>
-            <label>Nome Completo</label>
-            <Input {...form.register("requester_name")} placeholder="João Silva" />
-            {/* Erro de validação do hook-form */}
-         </div>
-         
-         {/* Área Condicional do Arquivo */}
-         {!file ? (
-           <ReceiptUploader 
-             onFileSelect={(f) => form.setValue("file", f, { shouldValidate: true })} 
-           />
-         ) : (
-           <ReceiptPreview 
-              file={file} 
-              onCancel={() => form.setValue("file", null)}
-              // O componente ReceiptPreview deve disparar a Action de submit
-              onConfirm={form.handleSubmit(onSubmit)} 
-           />
-         )}
+        {/* Input Nome */}
+        <div>
+          <label>Nome Completo</label>
+          <Input
+            {...form.register("requester_name")}
+            placeholder="João Silva"
+          />
+          {/* Erro de validação do hook-form */}
+        </div>
+
+        {/* Área Condicional do Arquivo */}
+        {!file ? (
+          <ReceiptUploader
+            onFileSelect={(f) =>
+              form.setValue("file", f, { shouldValidate: true })
+            }
+          />
+        ) : (
+          <ReceiptPreview
+            file={file}
+            onCancel={() => form.setValue("file", null)}
+            // O componente ReceiptPreview deve disparar a Action de submit
+            onConfirm={form.handleSubmit(onSubmit)}
+          />
+        )}
       </form>
     </div>
-  )
+  );
 }
 ```
 
 ## Resumo para o Desenvolvedor que implementar:
+
 - **Priorize mobile-first:** O usuário irá acessar essa página na rua após ter pago uma despesa e tirar uma foto pelo celular.
 - **Não esqueça o FormData:** É mais seguro e padrão para trafegar arquivos binários com Next.js Server Actions.
 - **Separe o Schema:** Faça o `SubmitRefundFormSchema` para frontend, já que o Zod original que valida no BD (`CreateRefundSchema`) requer a `string` de URL do arquivo já feito o upload, e não o `File` cru.
