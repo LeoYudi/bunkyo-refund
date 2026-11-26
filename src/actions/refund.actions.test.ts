@@ -11,6 +11,7 @@ const {
   getRefundRequestsAction,
   updateRefundRequestAction,
   deleteRefundRequestAction,
+  deleteBatchRefundRequestsAction,
 } = refundActions as unknown as {
   submitRefundRequest: typeof refundActions.submitRefundRequest;
   getRefundRequestsAction: typeof refundActions.getRefundRequestsAction;
@@ -21,6 +22,14 @@ const {
   deleteRefundRequestAction: (
     id: string,
   ) => Promise<{ success: boolean; error?: string }>;
+  deleteBatchRefundRequestsAction: (requestIds: string[]) => Promise<{
+    success: boolean;
+    data?: {
+      succeeded: string[];
+      failed: Array<{ id: string; error: string }>;
+    };
+    error?: string;
+  }>;
 };
 
 vi.mock("next/cache", () => ({
@@ -319,5 +328,139 @@ describe("deleteRefundRequestAction", () => {
     const result = await deleteRefundRequestAction("req-1");
 
     expect(result).toEqual({ success: false, error: "Falha ao deletar" });
+  });
+});
+
+describe("deleteBatchRefundRequestsAction", () => {
+  let mockServiceInstance: {
+    deleteBatchRefundRequests: ReturnType<typeof vi.fn>;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    mockServiceInstance = {
+      deleteBatchRefundRequests: vi.fn(),
+    };
+
+    // biome-ignore lint/complexity/useArrowFunction: constructor mock requires function
+    vi.mocked(RefundService).mockImplementation(function () {
+      return mockServiceInstance as unknown as RefundService;
+    });
+  });
+
+  it("should return { success: false, error: 'Nenhuma solicitação selecionada' } when requestIds is empty without calling RefundService or revalidatePath", async () => {
+    const result = await deleteBatchRefundRequestsAction([]);
+
+    expect(result).toEqual({
+      success: false,
+      error: "Nenhuma solicitação selecionada",
+    });
+    expect(RefundService).not.toHaveBeenCalled();
+    expect(
+      mockServiceInstance.deleteBatchRefundRequests,
+    ).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("should call refundService.deleteBatchRefundRequests, revalidatePath('/admin'), and return { success: true, data } when all succeed", async () => {
+    const batchResult = {
+      succeeded: ["req-1", "req-2"],
+      failed: [],
+    };
+    mockServiceInstance.deleteBatchRefundRequests.mockResolvedValue(
+      batchResult,
+    );
+
+    const result = await deleteBatchRefundRequestsAction(["req-1", "req-2"]);
+
+    expect(RefundService).toHaveBeenCalled();
+    expect(mockServiceInstance.deleteBatchRefundRequests).toHaveBeenCalledWith([
+      "req-1",
+      "req-2",
+    ]);
+    expect(revalidatePath).toHaveBeenCalledWith("/admin");
+    expect(result).toEqual({
+      success: true,
+      data: batchResult,
+    });
+  });
+
+  it("should revalidatePath('/admin') and return { success: false, data, error } when there are partial failures (failed.length > 0)", async () => {
+    const batchResult = {
+      succeeded: ["req-1"],
+      failed: [
+        {
+          id: "req-2",
+          error: "Solicitação de reembolso não encontrada",
+        },
+      ],
+    };
+    mockServiceInstance.deleteBatchRefundRequests.mockResolvedValue(
+      batchResult,
+    );
+
+    const result = await deleteBatchRefundRequestsAction(["req-1", "req-2"]);
+
+    expect(mockServiceInstance.deleteBatchRefundRequests).toHaveBeenCalledWith([
+      "req-1",
+      "req-2",
+    ]);
+    expect(revalidatePath).toHaveBeenCalledWith("/admin");
+    expect(result).toEqual({
+      success: false,
+      data: batchResult,
+      error: expect.stringContaining("excluir"),
+    });
+  });
+
+  it("should revalidatePath('/admin') and return { success: false, data, error } when all deletions fail (failed.length > 0)", async () => {
+    const batchResult = {
+      succeeded: [],
+      failed: [
+        { id: "req-1", error: "Erro no banco" },
+        { id: "req-2", error: "Erro no storage" },
+      ],
+    };
+    mockServiceInstance.deleteBatchRefundRequests.mockResolvedValue(
+      batchResult,
+    );
+
+    const result = await deleteBatchRefundRequestsAction(["req-1", "req-2"]);
+
+    expect(revalidatePath).toHaveBeenCalledWith("/admin");
+    expect(result).toEqual({
+      success: false,
+      data: batchResult,
+      error: expect.stringContaining("excluir"),
+    });
+  });
+
+  it("should return { success: false, error } when refundService.deleteBatchRefundRequests throws an unexpected exception", async () => {
+    mockServiceInstance.deleteBatchRefundRequests.mockRejectedValue(
+      new Error("Erro inesperado ao excluir lote"),
+    );
+
+    const result = await deleteBatchRefundRequestsAction(["req-1", "req-2"]);
+
+    expect(revalidatePath).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      success: false,
+      error: "Erro inesperado ao excluir lote",
+    });
+  });
+
+  it("should handle non-Error exceptions and return { success: false, error } with stringified error", async () => {
+    mockServiceInstance.deleteBatchRefundRequests.mockRejectedValue(
+      "Falha crítica desconhecida",
+    );
+
+    const result = await deleteBatchRefundRequestsAction(["req-1"]);
+
+    expect(revalidatePath).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      success: false,
+      error: "Falha crítica desconhecida",
+    });
   });
 });

@@ -1,4 +1,5 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import type { ComponentProps, ComponentType } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   processBatchReceiptsAction,
@@ -8,6 +9,7 @@ import {
   exportToCsvAction,
   sendBatchPaymentEmailAction,
 } from "@/actions/batch.actions";
+import * as refundActions from "@/actions/refund.actions";
 import type { Database } from "@/models/database.types";
 import { RequestsTable } from "./requests-table";
 
@@ -30,6 +32,29 @@ vi.mock("@/actions/batch.actions", () => ({
   exportToCsvAction: vi.fn(),
 }));
 
+vi.mock("@/actions/refund.actions", () => ({
+  updateRefundRequestAction: vi.fn(),
+  deleteRefundRequestAction: vi.fn(),
+  deleteBatchRefundRequestsAction: vi.fn(),
+}));
+
+const {
+  updateRefundRequestAction,
+  deleteRefundRequestAction,
+  deleteBatchRefundRequestsAction,
+} = refundActions as unknown as {
+  updateRefundRequestAction: typeof refundActions.updateRefundRequestAction;
+  deleteRefundRequestAction: typeof refundActions.deleteRefundRequestAction;
+  deleteBatchRefundRequestsAction: (requestIds: string[]) => Promise<{
+    success: boolean;
+    data?: {
+      succeeded: string[];
+      failed: Array<{ id: string; error: string }>;
+    };
+    error?: string;
+  }>;
+};
+
 type RefundRequest = Database["public"]["Tables"]["refund_requests"]["Row"];
 
 describe("RequestsTable", () => {
@@ -47,6 +72,17 @@ describe("RequestsTable", () => {
     vi.mocked(exportToCsvAction).mockResolvedValue({
       success: true,
       csv: "\uFEFFID,Solicitante\nreq-1,Alice",
+    });
+    vi.mocked(updateRefundRequestAction).mockResolvedValue({
+      success: true,
+      data: {} as RefundRequest,
+    });
+    vi.mocked(deleteRefundRequestAction).mockResolvedValue({
+      success: true,
+    });
+    vi.mocked(deleteBatchRefundRequestsAction).mockResolvedValue({
+      success: true,
+      data: { succeeded: [], failed: [] },
     });
   });
 
@@ -703,7 +739,7 @@ describe("RequestsTable", () => {
       expect(allCheckboxes).toHaveLength(8);
     });
 
-    it("should enable checkboxes for PENDING and APPROVED rows and disable them for PROCESSING, DENIED, SENT, and PAID rows", () => {
+    it("should enable checkboxes for all request statuses (PENDING, APPROVED, PROCESSING, DENIED, SENT, and PAID)", () => {
       render(<RequestsTable requests={bulkMockRequests} />);
 
       const allCheckboxes = screen.getAllByRole("checkbox");
@@ -722,10 +758,25 @@ describe("RequestsTable", () => {
       expect(pendingCb).not.toBeDisabled();
       expect(approved1Cb).not.toBeDisabled();
       expect(approved2Cb).not.toBeDisabled();
-      expect(processingCb).toBeDisabled();
-      expect(deniedCb).toBeDisabled();
-      expect(sentCb).toBeDisabled();
-      expect(paidCb).toBeDisabled();
+      expect(processingCb).not.toBeDisabled();
+      expect(deniedCb).not.toBeDisabled();
+      expect(sentCb).not.toBeDisabled();
+      expect(paidCb).not.toBeDisabled();
+    });
+
+    it("should select all rows across all statuses when clicking header select-all checkbox", () => {
+      render(<RequestsTable requests={bulkMockRequests} />);
+
+      const selectAllCheckbox = screen.getByRole("checkbox", {
+        name: /selecionar todas as solicitações/i,
+      });
+      expect(selectAllCheckbox).not.toBeDisabled();
+
+      fireEvent.click(selectAllCheckbox);
+      expect(screen.getByText(/7 selecionado\(s\)/i)).toBeInTheDocument();
+
+      fireEvent.click(selectAllCheckbox);
+      expect(screen.getByText(/0 selecionado\(s\)/i)).toBeInTheDocument();
     });
 
     it("should display the top action bar with '0 selecionado(s)' and both 'Aprovar para Leitura em Lote' and 'Enviar Pagamentos em Lote' buttons disabled initially", () => {
@@ -786,6 +837,37 @@ describe("RequestsTable", () => {
 
       expect(batchPaymentButton).not.toBeDisabled();
       expect(batchApproveButton).toBeDisabled();
+    });
+
+    it("should keep 'Aprovar para Leitura em Lote' and 'Enviar Pagamentos em Lote' disabled while enabling 'Excluir Selecionados' when PROCESSING, DENIED, SENT, or PAID rows are selected", () => {
+      render(<RequestsTable requests={bulkMockRequests} />);
+
+      const allCheckboxes = screen.getAllByRole("checkbox");
+      const processingCb = allCheckboxes[4];
+      const deniedCb = allCheckboxes[5];
+      const sentCb = allCheckboxes[6];
+      const paidCb = allCheckboxes[7];
+
+      fireEvent.click(processingCb);
+      fireEvent.click(deniedCb);
+      fireEvent.click(sentCb);
+      fireEvent.click(paidCb);
+
+      expect(screen.getByText(/4 selecionado\(s\)/i)).toBeInTheDocument();
+
+      const batchApproveButton = screen.getByRole("button", {
+        name: /aprovar para leitura em lote/i,
+      });
+      const batchPaymentButton = screen.getByRole("button", {
+        name: /enviar pagamentos em lote/i,
+      });
+      const bulkDeleteButton = screen.getByRole("button", {
+        name: /excluir selecionados/i,
+      });
+
+      expect(batchApproveButton).toBeDisabled();
+      expect(batchPaymentButton).toBeDisabled();
+      expect(bulkDeleteButton).not.toBeDisabled();
     });
 
     it("should call processBatchReceiptsAction with only selected PENDING request IDs when both PENDING and APPROVED rows are selected and 'Aprovar para Leitura em Lote' is clicked", async () => {
@@ -1010,6 +1092,346 @@ describe("RequestsTable", () => {
 
       expect(screen.getByRole("dialog")).toBeInTheDocument();
       expect(screen.getByText(/excluir solicita/i)).toBeInTheDocument();
+    });
+  });
+
+  describe("Bulk Delete with Confirmation Modal", () => {
+    const bulkDeleteMockRequests: RefundRequest[] = [
+      {
+        id: "req-pending",
+        requester_name: "Alice Pendente",
+        status: "PENDING",
+        created_at: new Date("2026-10-01T10:00:00Z").toISOString(),
+        updated_at: new Date("2026-10-01T10:00:00Z").toISOString(),
+        description: null,
+        issue_date: null,
+        issue_number: null,
+        issuer_cnpj: null,
+        issuer_name: null,
+        receipt_file_url: "https://example.com/1.pdf",
+        receiver_cnpj: null,
+        reviewed_by: null,
+        total_value: 100.0,
+      },
+      {
+        id: "req-approved",
+        requester_name: "Bruno Aprovado",
+        status: "APPROVED",
+        created_at: new Date("2026-10-02T10:00:00Z").toISOString(),
+        updated_at: new Date("2026-10-02T10:00:00Z").toISOString(),
+        description: "Despesa aprovada",
+        issue_date: "2026-10-02",
+        issue_number: "NF-201",
+        issuer_cnpj: "12.345.678/0001-90",
+        issuer_name: "Papelaria Central",
+        receipt_file_url: "https://example.com/2.pdf",
+        receiver_cnpj: null,
+        reviewed_by: "admin-1",
+        total_value: 250.0,
+      },
+      {
+        id: "req-processing",
+        requester_name: "Diego Processando",
+        status: "PROCESSING",
+        created_at: new Date("2026-10-03T10:00:00Z").toISOString(),
+        updated_at: new Date("2026-10-03T10:00:00Z").toISOString(),
+        description: null,
+        issue_date: null,
+        issue_number: null,
+        issuer_cnpj: null,
+        issuer_name: null,
+        receipt_file_url: "https://example.com/3.pdf",
+        receiver_cnpj: null,
+        reviewed_by: null,
+        total_value: null,
+      },
+      {
+        id: "req-denied",
+        requester_name: "Eduarda Negada",
+        status: "DENIED",
+        created_at: new Date("2026-10-04T10:00:00Z").toISOString(),
+        updated_at: new Date("2026-10-04T10:00:00Z").toISOString(),
+        description: null,
+        issue_date: null,
+        issue_number: null,
+        issuer_cnpj: null,
+        issuer_name: null,
+        receipt_file_url: "https://example.com/4.pdf",
+        receiver_cnpj: null,
+        reviewed_by: null,
+        total_value: null,
+      },
+      {
+        id: "req-sent",
+        requester_name: "Felipe Enviado",
+        status: "SENT",
+        created_at: new Date("2026-10-05T10:00:00Z").toISOString(),
+        updated_at: new Date("2026-10-05T10:00:00Z").toISOString(),
+        description: null,
+        issue_date: null,
+        issue_number: null,
+        issuer_cnpj: null,
+        issuer_name: null,
+        receipt_file_url: "https://example.com/5.pdf",
+        receiver_cnpj: null,
+        reviewed_by: null,
+        total_value: 80.0,
+      },
+      {
+        id: "req-paid",
+        requester_name: "Gabriela Paga",
+        status: "PAID",
+        created_at: new Date("2026-10-06T10:00:00Z").toISOString(),
+        updated_at: new Date("2026-10-06T10:00:00Z").toISOString(),
+        description: null,
+        issue_date: null,
+        issue_number: null,
+        issuer_cnpj: null,
+        issuer_name: null,
+        receipt_file_url: "https://example.com/6.pdf",
+        receiver_cnpj: null,
+        reviewed_by: null,
+        total_value: 120.0,
+      },
+    ];
+
+    type RequestsTableWithBulkDelete = ComponentType<
+      ComponentProps<typeof RequestsTable> & {
+        onDeleteBatch?: (requestIds: string[]) => Promise<void> | void;
+      }
+    >;
+
+    it("should render 'Excluir Selecionados' button in the top bar disabled initially when 0 selecionado(s)", () => {
+      render(<RequestsTable requests={bulkDeleteMockRequests} />);
+
+      expect(screen.getByText(/0 selecionado\(s\)/i)).toBeInTheDocument();
+      const bulkDeleteButton = screen.getByRole("button", {
+        name: /excluir selecionados/i,
+      });
+      expect(bulkDeleteButton).toBeInTheDocument();
+      expect(bulkDeleteButton).toBeDisabled();
+    });
+
+    it("should enable 'Excluir Selecionados' button when 1 or more requests of any status (e.g. SENT and PAID) are selected", () => {
+      render(<RequestsTable requests={bulkDeleteMockRequests} />);
+
+      const bulkDeleteButton = screen.getByRole("button", {
+        name: /excluir selecionados/i,
+      });
+      expect(bulkDeleteButton).toBeDisabled();
+
+      const sentCb = screen.getByRole("checkbox", { name: /Felipe Enviado/i });
+      const paidCb = screen.getByRole("checkbox", { name: /Gabriela Paga/i });
+
+      fireEvent.click(sentCb);
+      expect(screen.getByText(/1 selecionado\(s\)/i)).toBeInTheDocument();
+      expect(bulkDeleteButton).not.toBeDisabled();
+
+      fireEvent.click(paidCb);
+      expect(screen.getByText(/2 selecionado\(s\)/i)).toBeInTheDocument();
+      expect(bulkDeleteButton).not.toBeDisabled();
+    });
+
+    it("should open a confirmation modal showing the count of requests to be permanently deleted when clicking 'Excluir Selecionados'", () => {
+      render(<RequestsTable requests={bulkDeleteMockRequests} />);
+
+      fireEvent.click(
+        screen.getByRole("checkbox", { name: /Felipe Enviado/i }),
+      );
+      fireEvent.click(screen.getByRole("checkbox", { name: /Gabriela Paga/i }));
+
+      fireEvent.click(
+        screen.getByRole("button", { name: /excluir selecionados/i }),
+      );
+
+      const dialog = screen.getByRole("dialog");
+      expect(dialog).toBeInTheDocument();
+      expect(dialog.textContent).toMatch(/\b2\b/);
+      expect(dialog.textContent).toMatch(
+        /permanente|irreversível|não pode ser desfeita/i,
+      );
+    });
+
+    it("should close the confirmation modal without calling deleteBatchRefundRequestsAction or onDeleteBatch when clicking cancel", () => {
+      const onDeleteBatchMock = vi.fn();
+      const Table = RequestsTable as RequestsTableWithBulkDelete;
+
+      render(
+        <Table
+          requests={bulkDeleteMockRequests}
+          onDeleteBatch={onDeleteBatchMock}
+        />,
+      );
+
+      fireEvent.click(
+        screen.getByRole("checkbox", { name: /Felipe Enviado/i }),
+      );
+      fireEvent.click(
+        screen.getByRole("button", { name: /excluir selecionados/i }),
+      );
+
+      const dialog = screen.getByRole("dialog");
+      const cancelButton = within(dialog).getByRole("button", {
+        name: /cancelar/i,
+      });
+      fireEvent.click(cancelButton);
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(deleteBatchRefundRequestsAction).not.toHaveBeenCalled();
+      expect(onDeleteBatchMock).not.toHaveBeenCalled();
+    });
+
+    it("should call deleteBatchRefundRequestsAction(selectedIds), clear deleted IDs from selection, and close the modal on confirm without onDeleteBatch prop", async () => {
+      vi.mocked(deleteBatchRefundRequestsAction).mockResolvedValueOnce({
+        success: true,
+        data: { succeeded: ["req-sent", "req-paid"], failed: [] },
+      });
+
+      render(<RequestsTable requests={bulkDeleteMockRequests} />);
+
+      fireEvent.click(
+        screen.getByRole("checkbox", { name: /Felipe Enviado/i }),
+      );
+      fireEvent.click(screen.getByRole("checkbox", { name: /Gabriela Paga/i }));
+      expect(screen.getByText(/2 selecionado\(s\)/i)).toBeInTheDocument();
+
+      fireEvent.click(
+        screen.getByRole("button", { name: /excluir selecionados/i }),
+      );
+
+      const dialog = screen.getByRole("dialog");
+      const confirmButton = within(dialog).getByRole("button", {
+        name: /excluir|confirmar/i,
+      });
+
+      await act(async () => {
+        fireEvent.click(confirmButton);
+      });
+
+      expect(deleteBatchRefundRequestsAction).toHaveBeenCalledTimes(1);
+      expect(deleteBatchRefundRequestsAction).toHaveBeenCalledWith([
+        "req-sent",
+        "req-paid",
+      ]);
+      expect(screen.getByText(/0 selecionado\(s\)/i)).toBeInTheDocument();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("should call onDeleteBatch(selectedIds), clear selection, and close the modal on confirm when onDeleteBatch prop is provided", async () => {
+      const onDeleteBatchMock = vi.fn().mockResolvedValue(undefined);
+      const Table = RequestsTable as RequestsTableWithBulkDelete;
+
+      render(
+        <Table
+          requests={bulkDeleteMockRequests}
+          onDeleteBatch={onDeleteBatchMock}
+        />,
+      );
+
+      fireEvent.click(
+        screen.getByRole("checkbox", { name: /Eduarda Negada/i }),
+      );
+      fireEvent.click(screen.getByRole("checkbox", { name: /Gabriela Paga/i }));
+      expect(screen.getByText(/2 selecionado\(s\)/i)).toBeInTheDocument();
+
+      fireEvent.click(
+        screen.getByRole("button", { name: /excluir selecionados/i }),
+      );
+
+      const dialog = screen.getByRole("dialog");
+      const confirmButton = within(dialog).getByRole("button", {
+        name: /excluir|confirmar/i,
+      });
+
+      await act(async () => {
+        fireEvent.click(confirmButton);
+      });
+
+      expect(onDeleteBatchMock).toHaveBeenCalledTimes(1);
+      expect(onDeleteBatchMock).toHaveBeenCalledWith([
+        "req-denied",
+        "req-paid",
+      ]);
+      expect(deleteBatchRefundRequestsAction).not.toHaveBeenCalled();
+      expect(screen.getByText(/0 selecionado\(s\)/i)).toBeInTheDocument();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("should display error alert (role='alert') and remove only succeeded IDs from selection when deleteBatchRefundRequestsAction returns partial failure", async () => {
+      vi.mocked(deleteBatchRefundRequestsAction).mockResolvedValueOnce({
+        success: false,
+        data: {
+          succeeded: ["req-sent"],
+          failed: [{ id: "req-paid", error: "Erro ao deletar req-paid" }],
+        },
+        error: "Falha ao excluir 1 solicitação(ões): Erro ao deletar req-paid",
+      });
+
+      render(<RequestsTable requests={bulkDeleteMockRequests} />);
+
+      const sentCb = screen.getByRole("checkbox", { name: /Felipe Enviado/i });
+      const paidCb = screen.getByRole("checkbox", { name: /Gabriela Paga/i });
+
+      fireEvent.click(sentCb);
+      fireEvent.click(paidCb);
+      expect(screen.getByText(/2 selecionado\(s\)/i)).toBeInTheDocument();
+
+      fireEvent.click(
+        screen.getByRole("button", { name: /excluir selecionados/i }),
+      );
+
+      const dialog = screen.getByRole("dialog");
+      const confirmButton = within(dialog).getByRole("button", {
+        name: /excluir|confirmar/i,
+      });
+
+      await act(async () => {
+        fireEvent.click(confirmButton);
+      });
+
+      const alert = await screen.findByRole("alert");
+      expect(alert).toBeInTheDocument();
+      expect(alert.textContent).toMatch(/falha ao excluir 1 solicitação/i);
+      expect(screen.getByText(/1 selecionado\(s\)/i)).toBeInTheDocument();
+      expect(sentCb).not.toBeChecked();
+      expect(paidCb).toBeChecked();
+    });
+
+    it("should display error alert (role='alert') and keep all selected IDs when deleteBatchRefundRequestsAction returns an error without data", async () => {
+      vi.mocked(deleteBatchRefundRequestsAction).mockResolvedValueOnce({
+        success: false,
+        error: "Erro inesperado ao excluir solicitações",
+      });
+
+      render(<RequestsTable requests={bulkDeleteMockRequests} />);
+
+      const sentCb = screen.getByRole("checkbox", { name: /Felipe Enviado/i });
+      const paidCb = screen.getByRole("checkbox", { name: /Gabriela Paga/i });
+
+      fireEvent.click(sentCb);
+      fireEvent.click(paidCb);
+
+      fireEvent.click(
+        screen.getByRole("button", { name: /excluir selecionados/i }),
+      );
+
+      const dialog = screen.getByRole("dialog");
+      const confirmButton = within(dialog).getByRole("button", {
+        name: /excluir|confirmar/i,
+      });
+
+      await act(async () => {
+        fireEvent.click(confirmButton);
+      });
+
+      const alert = await screen.findByRole("alert");
+      expect(alert).toBeInTheDocument();
+      expect(alert).toHaveTextContent(
+        "Erro inesperado ao excluir solicitações",
+      );
+      expect(screen.getByText(/2 selecionado\(s\)/i)).toBeInTheDocument();
+      expect(sentCb).toBeChecked();
+      expect(paidCb).toBeChecked();
     });
   });
 });
