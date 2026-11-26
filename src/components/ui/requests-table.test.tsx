@@ -1246,8 +1246,8 @@ describe("RequestsTable", () => {
 
       const dialog = screen.getByRole("dialog");
       expect(dialog).toBeInTheDocument();
-      expect(dialog).toHaveTextContent(/\b2\b/);
-      expect(dialog).toHaveTextContent(
+      expect(dialog.textContent).toMatch(/\b2\b/);
+      expect(dialog.textContent).toMatch(
         /permanente|irreversível|não pode ser desfeita/i,
       );
     });
@@ -1391,7 +1391,7 @@ describe("RequestsTable", () => {
 
       const alert = await screen.findByRole("alert");
       expect(alert).toBeInTheDocument();
-      expect(alert).toHaveTextContent(/falha ao excluir 1 solicitação/i);
+      expect(alert.textContent).toMatch(/falha ao excluir 1 solicitação/i);
       expect(screen.getByText(/1 selecionado\(s\)/i)).toBeInTheDocument();
       expect(sentCb).not.toBeChecked();
       expect(paidCb).toBeChecked();
