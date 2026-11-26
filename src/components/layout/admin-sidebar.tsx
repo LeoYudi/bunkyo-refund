@@ -7,7 +7,17 @@ import { useTransition } from "react";
 import { logoutAction } from "@/actions/auth.actions";
 import { Button } from "@/components/ui/button";
 
-export function AdminSidebar() {
+export interface AdminSidebarUser {
+  name?: string | null;
+  email?: string | null;
+  avatarUrl?: string | null;
+}
+
+export interface AdminSidebarProps {
+  user?: AdminSidebarUser | null;
+}
+
+export function AdminSidebar({ user }: AdminSidebarProps) {
   const [isPending, startTransition] = useTransition();
   const pathname = usePathname();
 
@@ -94,10 +104,10 @@ export function AdminSidebar() {
               <CircleUser className="h-8 w-8 text-muted-foreground shrink-0" />
               <div className="flex flex-col overflow-hidden">
                 <span className="text-sm font-medium truncate">
-                  Administrador
+                  {user?.name || "Administrador"}
                 </span>
                 <span className="text-xs text-muted-foreground truncate">
-                  admin@bunkyo.org.br
+                  {user?.email || "admin@bunkyo.org.br"}
                 </span>
               </div>
             </div>
