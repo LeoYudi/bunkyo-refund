@@ -20,6 +20,11 @@ export interface RefundBatchEmailProps {
   senderRole?: string;
   senderEmail?: string;
   senderPhone?: string;
+  greetingText?: string;
+  introTextTemplate?: string;
+  spreadsheetText?: string;
+  approvalRequestText?: string;
+  closingText?: string;
 }
 
 export function RefundBatchEmail({

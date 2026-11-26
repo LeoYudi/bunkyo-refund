@@ -1,5 +1,6 @@
 import React from "react";
 import type { RefundRequest } from "@/models/refund.model";
+import type { EmailSettings } from "@/models/settings.model";
 import type { BatchEmailMetadata } from "@/services/email.service";
 import { Button } from "./button";
 import {
@@ -19,6 +20,7 @@ export interface BatchPaymentDialogProps {
   isOpen: boolean;
   onClose: () => void;
   selectedRequests?: RefundRequest[];
+  defaultSettings?: EmailSettings;
   onConfirm?: (
     selectedRequests: RefundRequest[],
     recipientEmail?: string,
