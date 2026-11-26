@@ -434,4 +434,80 @@ describe("RefundRepository", () => {
       ).rejects.toThrow("Database update constraint failed");
     });
   });
+
+  describe("delete", () => {
+    it("should successfully delete a refund request by id when supabase returns no error", async () => {
+      const mockSupabase = {
+        from: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({
+          data: null,
+          error: null,
+        }),
+      };
+
+      mockCreateClient(mockSupabase);
+
+      await expect(
+        (
+          repository as unknown as {
+            delete: (id: string) => Promise<void>;
+          }
+        ).delete("123e4567-e89b-12d3-a456-426614174000"),
+      ).resolves.toBeUndefined();
+
+      expect(createClient).toHaveBeenCalled();
+      expect(mockSupabase.from).toHaveBeenCalledWith("refund_requests");
+      expect(mockSupabase.delete).toHaveBeenCalled();
+      expect(mockSupabase.eq).toHaveBeenCalledWith(
+        "id",
+        "123e4567-e89b-12d3-a456-426614174000",
+      );
+    });
+
+    it("should throw an error when supabase returns an Error instance on delete", async () => {
+      const mockSupabase = {
+        from: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({
+          data: null,
+          error: new Error("Failed to delete refund request from database"),
+        }),
+      };
+
+      mockCreateClient(mockSupabase);
+
+      await expect(
+        (
+          repository as unknown as {
+            delete: (id: string) => Promise<void>;
+          }
+        ).delete("123e4567-e89b-12d3-a456-426614174000"),
+      ).rejects.toThrow("Failed to delete refund request from database");
+    });
+
+    it("should throw an error with error message when supabase returns a PostgrestError object on delete", async () => {
+      const mockSupabase = {
+        from: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({
+          data: null,
+          error: {
+            code: "23503",
+            message: "Foreign key violation during delete",
+          },
+        }),
+      };
+
+      mockCreateClient(mockSupabase);
+
+      await expect(
+        (
+          repository as unknown as {
+            delete: (id: string) => Promise<void>;
+          }
+        ).delete("123e4567-e89b-12d3-a456-426614174000"),
+      ).rejects.toThrow("Foreign key violation during delete");
+    });
+  });
 });

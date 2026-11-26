@@ -122,4 +122,16 @@ export class RefundRepository {
 
     return data;
   }
+
+  async delete(id: string): Promise<void> {
+    const supabase = await this.getClient();
+    const { error } = await supabase
+      .from("refund_requests")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      throw new Error(extractErrorMessage(error));
+    }
+  }
 }

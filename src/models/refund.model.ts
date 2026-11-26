@@ -21,15 +21,45 @@ export const CreateRefundSchema = z.object({
 const cnpjRegex = /^(?:\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{14})$/;
 
 export const UpdateRefundSchema = z.object({
+  requester_name: z
+    .string()
+    .min(2, "Nome deve ter pelo menos 2 caracteres")
+    .optional(),
   status: RefundStatusSchema.optional(),
-  issuer_name: z.string().optional(),
-  issuer_cnpj: z.string().regex(cnpjRegex).optional(),
-  receiver_cnpj: z.string().regex(cnpjRegex).optional(),
-  total_value: z.number().positive().optional(),
-  issue_date: z.string().date().optional(),
-  issue_number: z.string().optional(),
-  description: z.string().optional(),
+  issuer_name: z
+    .string()
+    .nullish()
+    .transform((val) => (val === "" ? null : val)),
+  issuer_cnpj: z
+    .string()
+    .nullish()
+    .transform((val) => (val === "" ? null : val))
+    .pipe(z.string().regex(cnpjRegex, "CNPJ inválido").nullish()),
+  receiver_cnpj: z
+    .string()
+    .nullish()
+    .transform((val) => (val === "" ? null : val))
+    .pipe(z.string().regex(cnpjRegex, "CNPJ inválido").nullish()),
+  total_value: z.preprocess(
+    (val) => (val === "" || val === undefined ? null : val),
+    z.number().positive("Valor deve ser positivo").nullish(),
+  ),
+  issue_date: z
+    .string()
+    .nullish()
+    .transform((val) => (val === "" ? null : val))
+    .pipe(z.string().date().nullish()),
+  issue_number: z
+    .string()
+    .nullish()
+    .transform((val) => (val === "" ? null : val)),
+  description: z
+    .string()
+    .nullish()
+    .transform((val) => (val === "" ? null : val)),
 });
+
+export type UpdateRefundInput = z.infer<typeof UpdateRefundSchema>;
 
 export const RefundSchema = z.object({
   id: z.string().uuid(),
