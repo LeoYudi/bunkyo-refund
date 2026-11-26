@@ -26,7 +26,14 @@ export interface BatchPaymentDialogProps {
     recipientEmail?: string,
     cc?: string,
     bcc?: string,
-    metadata?: BatchEmailMetadata,
+    metadata?: BatchEmailMetadata & {
+      greetingText?: string;
+      introTextTemplate?: string;
+      spreadsheetText?: string;
+      approvalRequestText?: string;
+      closingText?: string;
+      senderEmail?: string;
+    },
   ) => void | Promise<void>;
 }
 
@@ -34,32 +41,48 @@ export function BatchPaymentDialog({
   isOpen,
   onClose,
   selectedRequests = [],
+  defaultSettings,
   onConfirm,
 }: BatchPaymentDialogProps) {
   const [isConfirming, setIsConfirming] = React.useState(false);
-  const [recipientEmail, setRecipientEmail] = React.useState("");
-  const [ccEmail, setCcEmail] = React.useState("");
-  const [bccEmail, setBccEmail] = React.useState("");
+  const [recipientEmail, setRecipientEmail] = React.useState(
+    defaultSettings?.recipient_email ?? "",
+  );
+  const [ccEmail, setCcEmail] = React.useState(defaultSettings?.cc_email ?? "");
+  const [bccEmail, setBccEmail] = React.useState(
+    defaultSettings?.bcc_email ?? "",
+  );
   const [pixByRequester, setPixByRequester] = React.useState<
     Record<string, string>
   >({});
-  const [subject, setSubject] = React.useState("");
-  const [eventDescription, setEventDescription] = React.useState("");
+  const [subject, setSubject] = React.useState(
+    defaultSettings?.subject_prefix ?? "",
+  );
+  const [eventDescription, setEventDescription] = React.useState(
+    defaultSettings?.default_event_description ?? "",
+  );
   const [approverEmail, setApproverEmail] = React.useState(
-    "jaque.hanaoka@gmail.com",
+    defaultSettings?.approver_email ?? "jaque.hanaoka@gmail.com",
   );
-  const [senderName, setSenderName] = React.useState("Lucas Tamanaha");
+  const [senderName, setSenderName] = React.useState(
+    defaultSettings?.sender_name ?? "Lucas Tamanaha",
+  );
   const [senderRole, setSenderRole] = React.useState(
-    "Diretor Financeiro da Comissão de Jovens do Bunkyo - Gestão 2026",
+    defaultSettings?.sender_role ??
+      "Diretor Financeiro da Comissão de Jovens do Bunkyo - Gestão 2026",
   );
-  const [senderPhone, setSenderPhone] = React.useState("(16) 99332-8607");
+  const [senderEmail, setSenderEmail] = React.useState(
+    defaultSettings?.sender_email ?? "jovens@bunkyo.org.br",
+  );
+  const [senderPhone, setSenderPhone] = React.useState(
+    defaultSettings?.sender_phone ?? "(16) 99332-8607",
+  );
 
   const currencyFormatter = new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
   });
 
-  // Group selectedRequests by requester_name keeping order of appearance
   const groups: Array<{
     requesterName: string;
     totalAmount: number;
@@ -89,15 +112,40 @@ export function BatchPaymentDialog({
     }
     try {
       setIsConfirming(true);
-      await onConfirm(selectedRequests, recipientEmail, ccEmail, bccEmail, {
+      const metadataPayload: BatchEmailMetadata & {
+        greetingText?: string;
+        introTextTemplate?: string;
+        spreadsheetText?: string;
+        approvalRequestText?: string;
+        closingText?: string;
+        senderEmail?: string;
+      } = {
         subject,
         eventDescription,
         approverEmail,
         pixByRequester,
         senderName,
         senderRole,
+        senderEmail,
         senderPhone,
-      });
+      };
+
+      if (defaultSettings) {
+        metadataPayload.greetingText = defaultSettings.greeting_text;
+        metadataPayload.introTextTemplate = defaultSettings.intro_text_template;
+        metadataPayload.spreadsheetText = defaultSettings.spreadsheet_text;
+        metadataPayload.approvalRequestText =
+          defaultSettings.approval_request_text;
+        metadataPayload.closingText = defaultSettings.closing_text;
+      }
+
+      await onConfirm(
+        selectedRequests,
+        recipientEmail,
+        ccEmail,
+        bccEmail,
+        metadataPayload,
+      );
       onClose();
     } finally {
       setIsConfirming(false);
@@ -132,53 +180,52 @@ export function BatchPaymentDialog({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="cc-email">Cc (Cópia)</Label>
-            <Input
-              id="cc-email"
-              type="text"
-              placeholder="Ex: gestor@bunkyo.org.br, fiscal@bunkyo.org.br"
-              value={ccEmail}
-              onChange={(e) => setCcEmail(e.target.value)}
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="cc-email">Cc (Cópia)</Label>
+              <Input
+                id="cc-email"
+                type="email"
+                placeholder="Cc"
+                value={ccEmail}
+                onChange={(e) => setCcEmail(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="bcc-email">Cco (Cópia Oculta)</Label>
+              <Input
+                id="bcc-email"
+                type="email"
+                placeholder="Cco"
+                value={bccEmail}
+                onChange={(e) => setBccEmail(e.target.value)}
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="bcc-email">Cco (Cópia Oculta)</Label>
+            <Label htmlFor="batch-subject">Assunto</Label>
             <Input
-              id="bcc-email"
-              type="text"
-              placeholder="Ex: diretoria@bunkyo.org.br"
-              value={bccEmail}
-              onChange={(e) => setBccEmail(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="email-subject">Assunto do E-mail</Label>
-            <Input
-              id="email-subject"
+              id="batch-subject"
+              placeholder="Reembolso CJB - "
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder="Ex: Reembolso CJB - DFI 2026"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="event-description">
-              Descrição do Evento / Gastos
-            </Label>
+            <Label htmlFor="event-description">Descrição do Evento</Label>
             <Input
               id="event-description"
+              placeholder="Ex: gastos com baiten do DFI 2026"
               value={eventDescription}
               onChange={(e) => setEventDescription(e.target.value)}
-              placeholder="Ex: gastos com baiten do DFI 2026 que ocorreu nos dias 26 e 27/09/2026"
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="approver-email">
-              E-mail para Aprovação (@Menção)
+              E-mail para Aprovação / Menção
             </Label>
             <Input
               id="approver-email"
@@ -188,50 +235,7 @@ export function BatchPaymentDialog({
             />
           </div>
 
-          <div className="space-y-3 pt-2 border-t border-gray-200 dark:border-gray-700">
-            <h4 className="text-xs font-semibold uppercase text-gray-500 tracking-wider">
-              Solicitantes e Chaves PIX
-            </h4>
-            {groups.map((group) => (
-              <div
-                key={group.requesterName}
-                className="space-y-1.5 p-3 rounded-lg border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50"
-              >
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {group.requesterName}
-                  </span>
-                  <span className="text-gray-600 dark:text-gray-300 font-semibold">
-                    {currencyFormatter.format(group.totalAmount)}
-                  </span>
-                </div>
-                <div className="space-y-1 pt-1">
-                  <Label
-                    htmlFor={`pix-${group.requesterName}`}
-                    className="sr-only"
-                  >
-                    PIX de {group.requesterName}
-                  </Label>
-                  <Input
-                    id={`pix-${group.requesterName}`}
-                    placeholder="Chave PIX (CPF, CNPJ, celular, aleatória)"
-                    value={pixByRequester[group.requesterName] ?? ""}
-                    onChange={(e) =>
-                      setPixByRequester((prev) => ({
-                        ...prev,
-                        [group.requesterName]: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="space-y-3 pt-2 border-t border-gray-200 dark:border-gray-700">
-            <h4 className="text-xs font-semibold uppercase text-gray-500 tracking-wider">
-              Assinatura do E-mail
-            </h4>
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="sender-name">Nome na Assinatura</Label>
               <Input
@@ -248,6 +252,17 @@ export function BatchPaymentDialog({
                 onChange={(e) => setSenderRole(e.target.value)}
               />
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="sender-email-input">E-mail na Assinatura</Label>
+              <Input
+                id="sender-email-input"
+                value={senderEmail}
+                onChange={(e) => setSenderEmail(e.target.value)}
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="sender-phone">Telefone na Assinatura</Label>
               <Input
@@ -257,28 +272,60 @@ export function BatchPaymentDialog({
               />
             </div>
           </div>
+
+          <div className="border rounded-md p-3 space-y-3 bg-muted/30 text-sm">
+            <div className="font-semibold text-xs text-muted-foreground uppercase tracking-wider">
+              Resumo do Lote ({count} {count === 1 ? "item" : "itens"})
+            </div>
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {groups.map((g) => (
+                <div
+                  key={g.requesterName}
+                  className="space-y-1 pb-2 border-b last:border-0"
+                >
+                  <div className="flex justify-between font-medium">
+                    <span>{g.requesterName}</span>
+                    <span>{currencyFormatter.format(g.totalAmount)}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label
+                      htmlFor={`pix-${g.requesterName}`}
+                      className="text-xs text-muted-foreground"
+                    >
+                      PIX de {g.requesterName}
+                    </Label>
+                    <Input
+                      id={`pix-${g.requesterName}`}
+                      className="h-7 text-xs"
+                      placeholder="Chave PIX do colaborador"
+                      value={pixByRequester[g.requesterName] || ""}
+                      onChange={(e) =>
+                        setPixByRequester((prev) => ({
+                          ...prev,
+                          [g.requesterName]: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-between font-bold pt-2 border-t">
+              <span>Valor Total do Lote:</span>
+              <span>{currencyFormatter.format(totalSum)}</span>
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-center justify-between py-3 border-t border-gray-200 dark:border-gray-700 font-semibold text-gray-900 dark:text-white shrink-0">
-          <span>Valor Total Geral</span>
-          <span>{currencyFormatter.format(totalSum)}</span>
-        </div>
-
-        <DialogFooter className="sm:justify-end gap-2 shrink-0">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onClose}
-            disabled={isConfirming}
-          >
+        <DialogFooter className="pt-2">
+          <Button variant="outline" onClick={onClose} disabled={isConfirming}>
             Cancelar
           </Button>
           <Button
-            type="button"
             onClick={handleConfirm}
             disabled={isConfirming || count === 0}
           >
-            {isConfirming ? "Enviando..." : "Confirmar Envio"}
+            {isConfirming ? "Enviando e-mail..." : "Confirmar Envio"}
           </Button>
         </DialogFooter>
       </DialogContent>
