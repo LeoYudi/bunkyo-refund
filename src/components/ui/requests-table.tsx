@@ -21,6 +21,7 @@ import {
   sendBatchPaymentEmailAction,
 } from "@/actions/batch.actions";
 import {
+  deleteBatchRefundRequestsAction,
   deleteRefundRequestAction,
   updateRefundRequestAction,
 } from "@/actions/refund.actions";
@@ -72,6 +73,7 @@ export interface RequestsTableProps {
     payload: UpdateRefundInput,
   ) => void | Promise<void>;
   onDeleteRequest?: (requestId: string) => void | Promise<void>;
+  onDeleteBatch?: (requestIds: string[]) => Promise<void> | void;
 }
 
 export function RequestsTable({
@@ -82,6 +84,7 @@ export function RequestsTable({
   onExportCsv,
   onEditRequest,
   onDeleteRequest,
+  onDeleteBatch,
 }: RequestsTableProps) {
   const router = useRouter();
   const [selectedReceiptUrl, setSelectedReceiptUrl] = useState<string | null>(
@@ -107,10 +110,10 @@ export function RequestsTable({
     null,
   );
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
-  const selectableRequests = requests.filter(
-    (r) => r.status === "PENDING" || r.status === "APPROVED",
-  );
+  const selectableRequests = requests;
   const hasSelectableRequests = selectableRequests.length > 0;
   const allSelectableSelected =
     hasSelectableRequests &&
@@ -307,6 +310,41 @@ export function RequestsTable({
     }
   };
 
+  const handleDeleteBatch = async () => {
+    if (selectedIds.length === 0) return;
+    setIsBulkDeleting(true);
+    setErrorMessage(null);
+    try {
+      if (onDeleteBatch) {
+        await onDeleteBatch(selectedIds);
+        setSelectedIds([]);
+        setIsBulkDeleteDialogOpen(false);
+      } else {
+        const result = await deleteBatchRefundRequestsAction(selectedIds);
+        if (result.success) {
+          setSelectedIds([]);
+          setIsBulkDeleteDialogOpen(false);
+        } else {
+          const succeededIds = result.data?.succeeded ?? [];
+          if (succeededIds.length > 0) {
+            setSelectedIds((prev) =>
+              prev.filter((id) => !succeededIds.includes(id)),
+            );
+          }
+          setErrorMessage(
+            result.error || "Erro ao excluir solicitações em lote",
+          );
+          setIsBulkDeleteDialogOpen(false);
+        }
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+      setIsBulkDeleteDialogOpen(false);
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
@@ -343,6 +381,18 @@ export function RequestsTable({
           >
             Enviar Pagamentos em Lote
           </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={selectedIds.length === 0 || isBulkDeleting}
+            onClick={() => setIsBulkDeleteDialogOpen(true)}
+          >
+            {isBulkDeleting && (
+              <Loader2 className="size-4 animate-spin mr-1.5" />
+            )}
+            <Trash2 className="size-4 mr-1.5" />
+            Excluir Selecionados
+          </Button>
         </div>
       </div>
 
@@ -361,7 +411,7 @@ export function RequestsTable({
               <th scope="col" className="px-6 py-3 w-12">
                 <input
                   type="checkbox"
-                  aria-label="Selecionar todas as solicitações aprovadas"
+                  aria-label="Selecionar todas as solicitações"
                   disabled={!hasSelectableRequests}
                   checked={allSelectableSelected}
                   onChange={(e) => handleSelectAll(e.target.checked)}
@@ -401,8 +451,6 @@ export function RequestsTable({
             ) : (
               requests.map((req) => {
                 const currentStatus = REFUND_STATUS_MAP[req.status];
-                const isSelectable =
-                  req.status === "PENDING" || req.status === "APPROVED";
                 const isSelected = selectedIds.includes(req.id);
                 const hasReceipt = Boolean(req.receipt_file_url);
                 const hasAiResponse = Boolean(req.raw_ai_response?.trim());
@@ -417,12 +465,11 @@ export function RequestsTable({
                       <input
                         type="checkbox"
                         aria-label={`Selecionar solicitação de ${req.requester_name}`}
-                        disabled={!isSelectable}
                         checked={isSelected}
                         onChange={(e) =>
                           handleSelectOne(req.id, e.target.checked)
                         }
-                        className="rounded border-gray-300 text-primary focus:ring-primary dark:border-gray-600 dark:bg-gray-700 disabled:opacity-50"
+                        className="rounded border-gray-300 text-primary focus:ring-primary dark:border-gray-600 dark:bg-gray-700"
                       />
                     </td>
                     <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">
@@ -592,6 +639,44 @@ export function RequestsTable({
           selectedRequests={selectedApprovedRequests}
           onConfirm={handleConfirmBatch}
         />
+
+        <Dialog
+          open={isBulkDeleteDialogOpen}
+          onOpenChange={(open) => {
+            if (!open && !isBulkDeleting) {
+              setIsBulkDeleteDialogOpen(false);
+            }
+          }}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Excluir Solicitações em Lote</DialogTitle>
+              <DialogDescription>
+                Tem certeza que deseja excluir {selectedIds.length}{" "}
+                solicitação(ões) selecionada(s)? Esta ação é permanente e
+                irreversível e não pode ser desfeita.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsBulkDeleteDialogOpen(false)}
+                disabled={isBulkDeleting}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleDeleteBatch}
+                disabled={isBulkDeleting}
+              >
+                {isBulkDeleting ? "Excluindo..." : "Confirmar Exclusão"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

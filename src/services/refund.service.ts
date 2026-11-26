@@ -273,4 +273,33 @@ export class RefundService {
 
     await this.repository.delete(id);
   }
+
+  async deleteBatchRefundRequests(requestIds: string[]): Promise<{
+    succeeded: string[];
+    failed: Array<{ id: string; error: string }>;
+  }> {
+    if (!requestIds || requestIds.length === 0) {
+      throw new Error("Nenhuma solicitação selecionada");
+    }
+
+    const results = await Promise.allSettled(
+      requestIds.map((id) => this.deleteRefundRequest(id)),
+    );
+
+    const succeeded: string[] = [];
+    const failed: Array<{ id: string; error: string }> = [];
+
+    results.forEach((res, index) => {
+      const id = requestIds[index];
+      if (res.status === "fulfilled") {
+        succeeded.push(id);
+      } else {
+        const errorMsg =
+          res.reason instanceof Error ? res.reason.message : String(res.reason);
+        failed.push({ id, error: errorMsg });
+      }
+    });
+
+    return { succeeded, failed };
+  }
 }

@@ -1154,4 +1154,170 @@ describe("RefundService", () => {
       expect(mockRepositoryInstance.delete).not.toHaveBeenCalled();
     });
   });
+
+  describe("deleteBatchRefundRequests", () => {
+    type DeleteBatchResult = {
+      succeeded: string[];
+      failed: Array<{ id: string; error: string }>;
+    };
+
+    const getDeleteBatch = (service: RefundService) =>
+      (
+        service as unknown as {
+          deleteBatchRefundRequests: (
+            requestIds: string[],
+          ) => Promise<DeleteBatchResult>;
+        }
+      ).deleteBatchRefundRequests.bind(service);
+
+    const mockReq1: RefundRequest = {
+      id: "req-1",
+      requester_name: "Alice Silva",
+      status: "SENT",
+      issuer_name: "Restaurante Sabor",
+      issuer_cnpj: "12.345.678/0001-90",
+      receiver_cnpj: null,
+      total_value: 150.5,
+      issue_date: "2026-10-20",
+      issue_number: "NF-101",
+      description: "Almoço",
+      receipt_file_url:
+        "https://supabase.co/storage/v1/object/public/receipts/20261031-doc1.pdf",
+      created_at: "2026-10-20T10:00:00Z",
+      updated_at: "2026-10-20T10:00:00Z",
+      reviewed_by: "admin-1",
+    };
+
+    const mockReq2: RefundRequest = {
+      ...mockReq1,
+      id: "req-2",
+      requester_name: "Bob Santos",
+      status: "PAID",
+      receipt_file_url:
+        "https://supabase.co/storage/v1/object/public/receipts/20261031-doc2.pdf",
+    };
+
+    it("should throw error 'Nenhuma solicitação selecionada' when requestIds is empty", async () => {
+      const service = new RefundService();
+
+      await expect(getDeleteBatch(service)([])).rejects.toThrow(
+        "Nenhuma solicitação selecionada",
+      );
+
+      expect(mockRepositoryInstance.findById).not.toHaveBeenCalled();
+      expect(mockStorageRemove).not.toHaveBeenCalled();
+      expect(mockRepositoryInstance.delete).not.toHaveBeenCalled();
+    });
+
+    it("should use Promise.allSettled calling deleteRefundRequest for each ID (removing storage file and DB record) and return { succeeded, failed: [] } when all succeed", async () => {
+      const service = new RefundService();
+      const deleteSpy = vi.spyOn(service, "deleteRefundRequest");
+      const allSettledSpy = vi.spyOn(Promise, "allSettled");
+
+      mockRepositoryInstance.findById.mockImplementation(async (id: string) => {
+        if (id === "req-1") return mockReq1;
+        if (id === "req-2") return mockReq2;
+        return null;
+      });
+      mockRepositoryInstance.delete.mockResolvedValue(undefined);
+
+      try {
+        const result = await getDeleteBatch(service)(["req-1", "req-2"]);
+
+        expect(allSettledSpy).toHaveBeenCalledTimes(1);
+        expect(deleteSpy).toHaveBeenCalledTimes(2);
+        expect(deleteSpy).toHaveBeenCalledWith("req-1");
+        expect(deleteSpy).toHaveBeenCalledWith("req-2");
+        expect(mockSupabaseStorage.from).toHaveBeenCalledWith("receipts");
+        expect(mockStorageRemove).toHaveBeenCalledWith(["20261031-doc1.pdf"]);
+        expect(mockStorageRemove).toHaveBeenCalledWith(["20261031-doc2.pdf"]);
+        expect(mockRepositoryInstance.delete).toHaveBeenCalledWith("req-1");
+        expect(mockRepositoryInstance.delete).toHaveBeenCalledWith("req-2");
+        expect(result).toEqual({
+          succeeded: ["req-1", "req-2"],
+          failed: [],
+        });
+      } finally {
+        allSettledSpy.mockRestore();
+        deleteSpy.mockRestore();
+      }
+    });
+
+    it("should continue deleting remaining IDs when one ID is not found and return partial succeeded and failed", async () => {
+      const service = new RefundService();
+
+      mockRepositoryInstance.findById.mockImplementation(async (id: string) => {
+        if (id === "req-1") return mockReq1;
+        return null;
+      });
+      mockRepositoryInstance.delete.mockResolvedValue(undefined);
+
+      const result = await getDeleteBatch(service)(["req-1", "req-2"]);
+
+      expect(mockStorageRemove).toHaveBeenCalledWith(["20261031-doc1.pdf"]);
+      expect(mockRepositoryInstance.delete).toHaveBeenCalledWith("req-1");
+      expect(mockRepositoryInstance.delete).not.toHaveBeenCalledWith("req-2");
+      expect(result).toEqual({
+        succeeded: ["req-1"],
+        failed: [
+          {
+            id: "req-2",
+            error: "Solicitação de reembolso não encontrada",
+          },
+        ],
+      });
+    });
+
+    it("should continue deleting remaining IDs when repository.delete fails for one ID and return partial succeeded and failed", async () => {
+      const service = new RefundService();
+
+      mockRepositoryInstance.findById.mockImplementation(async (id: string) => {
+        if (id === "req-1") return mockReq1;
+        if (id === "req-2") return mockReq2;
+        return null;
+      });
+      mockRepositoryInstance.delete.mockImplementation(async (id: string) => {
+        if (id === "req-2") {
+          throw new Error("Erro ao excluir do banco");
+        }
+      });
+
+      const result = await getDeleteBatch(service)(["req-1", "req-2"]);
+
+      expect(mockRepositoryInstance.delete).toHaveBeenCalledWith("req-1");
+      expect(mockRepositoryInstance.delete).toHaveBeenCalledWith("req-2");
+      expect(result).toEqual({
+        succeeded: ["req-1"],
+        failed: [
+          {
+            id: "req-2",
+            error: "Erro ao excluir do banco",
+          },
+        ],
+      });
+    });
+
+    it("should return empty succeeded and all failed items when every deletion fails", async () => {
+      const service = new RefundService();
+
+      mockRepositoryInstance.findById.mockImplementation(async (id: string) => {
+        if (id === "req-1") return mockReq1;
+        if (id === "req-2") return mockReq2;
+        return null;
+      });
+      mockRepositoryInstance.delete.mockRejectedValue(
+        new Error("Falha de conexão com o banco"),
+      );
+
+      const result = await getDeleteBatch(service)(["req-1", "req-2"]);
+
+      expect(result).toEqual({
+        succeeded: [],
+        failed: [
+          { id: "req-1", error: "Falha de conexão com o banco" },
+          { id: "req-2", error: "Falha de conexão com o banco" },
+        ],
+      });
+    });
+  });
 });

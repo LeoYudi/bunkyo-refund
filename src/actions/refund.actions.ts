@@ -90,3 +90,39 @@ export async function deleteRefundRequestAction(
     return { success: false, error: errorMessage };
   }
 }
+
+export async function deleteBatchRefundRequestsAction(
+  requestIds: string[],
+): Promise<{
+  success: boolean;
+  data?: {
+    succeeded: string[];
+    failed: Array<{ id: string; error: string }>;
+  };
+  error?: string;
+}> {
+  if (!requestIds || requestIds.length === 0) {
+    return { success: false, error: "Nenhuma solicitação selecionada" };
+  }
+
+  try {
+    const refundService = new RefundService();
+    const data = await refundService.deleteBatchRefundRequests(requestIds);
+    revalidatePath("/admin");
+
+    if (data.failed.length > 0) {
+      return {
+        success: false,
+        data,
+        error: `Falha ao excluir ${data.failed.length} solicitação(ões): ${data.failed
+          .map((f) => f.error)
+          .join(", ")}`,
+      };
+    }
+
+    return { success: true, data };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { success: false, error: errorMessage };
+  }
+}
