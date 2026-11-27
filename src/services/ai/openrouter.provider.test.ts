@@ -8,9 +8,17 @@ interface OpenRouterContentPart {
   file?: { filename: string; file_data: string };
 }
 
+interface OpenRouterPlugin {
+  id: string;
+  pdf?: {
+    engine: string;
+  };
+}
+
 interface OpenRouterRequestBody {
   model: string;
   response_format?: { type: string };
+  plugins?: OpenRouterPlugin[];
   messages: Array<{
     role: string;
     content: string | OpenRouterContentPart[];
@@ -131,6 +139,7 @@ describe("OpenRouterProvider", () => {
       const body = JSON.parse(init.body as string) as OpenRouterRequestBody;
       expect(body.model).toBe("openrouter/free");
       expect(body.response_format).toEqual({ type: "json_object" });
+      expect(body).not.toHaveProperty("plugins");
 
       const contentParts = body.messages.flatMap((m) =>
         Array.isArray(m.content) ? m.content : [],
@@ -172,6 +181,7 @@ describe("OpenRouterProvider", () => {
       const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
       const body = JSON.parse(init.body as string) as OpenRouterRequestBody;
       expect(body.model).toBe("google/gemini-2.0-flash-exp:free");
+      expect(body).not.toHaveProperty("plugins");
     });
 
     it("falls back to 'openrouter/free' when OPENROUTER_MODEL is empty or whitespace", async () => {
@@ -201,7 +211,7 @@ describe("OpenRouterProvider", () => {
       expect(body.model).toBe("openrouter/free");
     });
 
-    it("sends file block with receipt.pdf for application/pdf using default model 'openrouter/free'", async () => {
+    it("sends file block with receipt.pdf and free cloudflare-ai file-parser plugin for application/pdf using default model 'openrouter/free'", async () => {
       process.env.OPENROUTER_API_KEY = "sk-or-v1-pdf";
       const fetchMock = vi.fn().mockResolvedValue(
         createFetchResponse({
@@ -229,6 +239,14 @@ describe("OpenRouterProvider", () => {
 
       const body = JSON.parse(init.body as string) as OpenRouterRequestBody;
       expect(body.model).toBe("openrouter/free");
+      expect(body.plugins).toEqual([
+        {
+          id: "file-parser",
+          pdf: {
+            engine: "cloudflare-ai",
+          },
+        },
+      ]);
 
       const contentParts = body.messages.flatMap((m) =>
         Array.isArray(m.content) ? m.content : [],
@@ -246,6 +264,72 @@ describe("OpenRouterProvider", () => {
         provider: "openrouter",
         rawText: samplePayloadJson,
       });
+    });
+
+    it("includes cloudflare-ai file-parser plugin for application/pdf even when custom OPENROUTER_MODEL is configured", async () => {
+      process.env.OPENROUTER_API_KEY = "sk-or-v1-pdf-custom";
+      process.env.OPENROUTER_MODEL = "google/gemini-2.0-flash-exp:free";
+      const fetchMock = vi.fn().mockResolvedValue(
+        createFetchResponse({
+          ok: true,
+          status: 200,
+          jsonData: {
+            choices: [{ message: { content: samplePayloadJson } }],
+          },
+        }),
+      );
+      global.fetch = fetchMock;
+
+      const provider = new OpenRouterProvider();
+      await provider.extract({
+        base64Data: Buffer.from("pdf-data").toString("base64"),
+        mimeType: "application/pdf",
+        prompt: samplePrompt,
+      });
+
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(init.body as string) as OpenRouterRequestBody;
+      expect(body.model).toBe("google/gemini-2.0-flash-exp:free");
+      expect(body.plugins).toEqual([
+        {
+          id: "file-parser",
+          pdf: {
+            engine: "cloudflare-ai",
+          },
+        },
+      ]);
+    });
+
+    it("does not send plugins payload property when mimeType is an image (image/*)", async () => {
+      process.env.OPENROUTER_API_KEY = "sk-or-v1-img-no-plugins";
+      const fetchMock = vi.fn().mockResolvedValue(
+        createFetchResponse({
+          ok: true,
+          status: 200,
+          jsonData: {
+            choices: [{ message: { content: samplePayloadJson } }],
+          },
+        }),
+      );
+      global.fetch = fetchMock;
+
+      const provider = new OpenRouterProvider();
+      for (const mimeType of ["image/jpeg", "image/png", "image/webp"]) {
+        await provider.extract({
+          base64Data: "abc",
+          mimeType,
+          prompt: samplePrompt,
+        });
+      }
+
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      for (const [, init] of fetchMock.mock.calls as Array<
+        [string, RequestInit]
+      >) {
+        const body = JSON.parse(init.body as string) as OpenRouterRequestBody;
+        expect("plugins" in body).toBe(false);
+        expect(body.plugins).toBeUndefined();
+      }
     });
 
     it("strips ```json markdown code fences so rawText is valid parseable JSON", async () => {
