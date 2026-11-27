@@ -239,6 +239,55 @@ describe("ai.service.ts - processReceiptWithAI (Multi-Provider Fallback)", () =>
         raw_ai_response: rawResponse,
       });
     });
+
+    it("includes all 7 ReceiptAIExtractionSchema JSON keys explicitly in the prompt sent to OpenRouter", async () => {
+      process.env.OPENROUTER_API_KEY = "sk-openrouter";
+      mockDownloadedFile("dummy-image-data");
+
+      const rawResponse = JSON.stringify(sampleReceiptPayload);
+      fetchMock.mockResolvedValueOnce(
+        createFetchResponse({
+          ok: true,
+          status: 200,
+          jsonData: {
+            choices: [{ message: { content: rawResponse } }],
+          },
+        }),
+      );
+
+      await processReceiptWithAI("receipts/123.jpg", "image/jpeg");
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe("https://openrouter.ai/api/v1/chat/completions");
+
+      const body = JSON.parse(init.body as string) as {
+        messages: Array<{
+          role: string;
+          content: Array<{ type: string; text?: string }>;
+        }>;
+      };
+
+      const textPart = body.messages[0]?.content[0];
+      expect(textPart?.type).toBe("text");
+      expect(typeof textPart?.text).toBe("string");
+
+      const promptText = textPart?.text ?? "";
+      const expectedKeys = [
+        "issuer_name",
+        "issuer_cnpj",
+        "receiver_cnpj",
+        "total_value",
+        "issue_date",
+        "issue_number",
+        "description",
+      ];
+
+      const missingKeys = expectedKeys.filter(
+        (key) => !new RegExp(`\\b${key}\\b`).test(promptText),
+      );
+      expect(missingKeys).toEqual([]);
+    });
   });
 
   describe("Default priority order (openrouter -> gemini -> mistral)", () => {
