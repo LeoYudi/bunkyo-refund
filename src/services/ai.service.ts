@@ -22,7 +22,7 @@ export async function processReceiptWithAI(
   const base64Data = Buffer.from(arrayBuffer).toString("base64");
 
   const prompt =
-    "Extraia os dados da nota fiscal em anexo. Se um dado não existir, retorne null. Converta valores monetários para número real (padrão americano) e datas para o formato ISO YYYY-MM-DD.";
+    "Extraia os dados da nota fiscal em anexo e retorne APENAS um objeto JSON válido contendo exatamente estas chaves: issuer_name (string ou null), issuer_cnpj (string ou null), receiver_cnpj (string ou null), total_value (number ou null), issue_date (string no formato ISO YYYY-MM-DD ou null), issue_number (string ou null), description (string ou null). Se um dado não existir, retorne null. Converta valores monetários para número real (padrão americano) e datas para o formato ISO YYYY-MM-DD.";
 
   const allProviders: Record<string, AIProvider> = {
     mistral: new MistralAIProvider(),
