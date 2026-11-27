@@ -356,4 +356,100 @@ describe("BatchPaymentDialog", () => {
       }),
     );
   });
+
+  it("should sync all input fields with updated defaultSettings when mounted closed (isOpen=false) and re-rendered with isOpen=true and new defaultSettings", () => {
+    const initialSettings: EmailSettings = {
+      id: "settings-initial",
+      recipient_email: "inicial@bunkyo.org.br",
+      cc_email: "cc-inicial@bunkyo.org.br",
+      bcc_email: "bcc-inicial@bunkyo.org.br",
+      subject_prefix: "Reembolso CJB - ",
+      default_event_description: "evento inicial",
+      greeting_text: "Pessoal, bom dia.",
+      intro_text_template:
+        "Gostaria de solicitar o reembolso referente aos {eventDescription}.",
+      spreadsheet_text: "Planilha inicial.",
+      approver_email: "jaque.hanaoka@gmail.com",
+      approval_request_text: "Por gentileza, revisar.",
+      closing_text: "Atenciosamente,",
+      sender_name: "Lucas Tamanaha",
+      sender_role:
+        "Diretor Financeiro da Comissão de Jovens do Bunkyo - Gestão 2026",
+      sender_email: "jovens@bunkyo.org.br",
+      sender_phone: "(16) 99332-8607",
+      updated_at: "2026-11-26T10:00:00Z",
+    };
+
+    const updatedSettings: EmailSettings = {
+      id: "settings-updated",
+      recipient_email: "novo-financeiro@bunkyo.org.br",
+      cc_email: "novo-cc@bunkyo.org.br",
+      bcc_email: "novo-bcc@bunkyo.org.br",
+      subject_prefix: "Reembolso Atualizado - ",
+      default_event_description: "gastos com o Undokai 2026",
+      greeting_text: "Bom dia equipe,",
+      intro_text_template: "Segue pedido referente aos {eventDescription}.",
+      spreadsheet_text: "Planilha atualizada.",
+      approver_email: "novo-aprovador@bunkyo.org.br",
+      approval_request_text: "Favor aprovar.",
+      closing_text: "Obrigado,",
+      sender_name: "Mariana Sato",
+      sender_role: "Diretora Financeira CJB - Gestão 2027",
+      sender_email: "mariana@bunkyo.org.br",
+      sender_phone: "(11) 98888-7777",
+      updated_at: "2026-11-27T14:00:00Z",
+    };
+
+    const { rerender } = render(
+      <BatchPaymentDialog
+        isOpen={false}
+        onClose={() => {}}
+        selectedRequests={mockSelectedRequests}
+        defaultSettings={initialSettings}
+      />,
+    );
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    rerender(
+      <BatchPaymentDialog
+        isOpen={true}
+        onClose={() => {}}
+        selectedRequests={mockSelectedRequests}
+        defaultSettings={updatedSettings}
+      />,
+    );
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByLabelText(/E-mail do Financeiro/i)).toHaveValue(
+      updatedSettings.recipient_email,
+    );
+    expect(screen.getByLabelText(/Cc \(Cópia\)/i)).toHaveValue(
+      updatedSettings.cc_email,
+    );
+    expect(screen.getByLabelText(/Cco \(Cópia Oculta\)/i)).toHaveValue(
+      updatedSettings.bcc_email,
+    );
+    expect(screen.getByLabelText(/Assunto/i)).toHaveValue(
+      updatedSettings.subject_prefix,
+    );
+    expect(screen.getByLabelText(/Descrição do Evento|Gastos/i)).toHaveValue(
+      updatedSettings.default_event_description,
+    );
+    expect(screen.getByLabelText(/E-mail para Aprovação|Menção/i)).toHaveValue(
+      updatedSettings.approver_email,
+    );
+    expect(screen.getByLabelText(/Nome na Assinatura/i)).toHaveValue(
+      updatedSettings.sender_name,
+    );
+    expect(screen.getByLabelText(/Cargo na Assinatura/i)).toHaveValue(
+      updatedSettings.sender_role,
+    );
+    expect(screen.getByLabelText(/E-mail na Assinatura/i)).toHaveValue(
+      updatedSettings.sender_email,
+    );
+    expect(screen.getByLabelText(/Telefone na Assinatura/i)).toHaveValue(
+      updatedSettings.sender_phone,
+    );
+  });
 });
