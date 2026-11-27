@@ -24,9 +24,7 @@ export class OpenRouterProvider implements AIProvider {
       throw new Error(`Unsupported MIME type for OpenRouter: ${mimeType}`);
     }
 
-    const model =
-      process.env.OPENROUTER_MODEL?.trim() ||
-      "mistralai/mistral-small-3.1-24b-instruct:free";
+    const model = process.env.OPENROUTER_MODEL?.trim() || "openrouter/free";
 
     let contentBlock: unknown;
     if (mimeType.startsWith("image/")) {

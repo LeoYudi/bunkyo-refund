@@ -1,8 +1,8 @@
-# Integração com IA Multi-Provider (Mistral AI → OpenRouter → Gemini)
+# Integração com IA Multi-Provider (OpenRouter → Gemini → Mistral)
 
 ## Objetivo
 
-Implementar a extração automatizada de dados de notas fiscais (imagens e PDFs) utilizando múltiplos provedores de inteligência artificial com suporte a fallback automático: **Mistral AI**, **OpenRouter** e **Google Gemini**.
+Implementar a extração automatizada de dados de notas fiscais (imagens e PDFs) utilizando múltiplos provedores de inteligência artificial com suporte a fallback automático: **OpenRouter**, **Google Gemini** e **Mistral AI**.
 
 ## Dependências Necessárias
 
@@ -15,7 +15,7 @@ Implementar a extração automatizada de dados de notas fiscais (imagens e PDFs)
    - Suporta imagens via Chat Completions (`mistral-small-latest`) com formato JSON object.
    - Suporta PDFs chamando primeiramente Mistral OCR (`mistral-ocr-latest`) e extraindo o markdown concatenado das páginas antes da chamada de chat.
 2. **`openrouter.provider.ts`**:
-   - Suporta imagens (`image_url`) e PDFs (`file`) via Chat Completions (`mistralai/mistral-small-3.1-24b-instruct:free`).
+   - Suporta imagens (`image_url`) e PDFs (`file`) via Chat Completions (`openrouter/free`).
    - Limpa automaticamente blocos de código markdown (` ```json ... ``` `).
 3. **`gemini.provider.ts`**:
    - Inicializa `GoogleGenAI` com `apiVersion: "v1beta"` e chama `interactions.create` com `gemini-3.8-flash` e Structured Output Zod/JSON schema.
@@ -23,6 +23,6 @@ Implementar a extração automatizada de dados de notas fiscais (imagens e PDFs)
 ## Orquestrador com Fallback (`src/services/ai.service.ts`)
 
 - Baixa o arquivo do Supabase Storage (`receipts`) **uma única vez**.
-- Monta a lista de provedores ativos baseada em `AI_PROVIDER_ORDER` (default `"mistral,openrouter,gemini"`) e `isConfigured()`.
+- Monta a lista de provedores ativos baseada em `AI_PROVIDER_ORDER` (default `"openrouter,gemini,mistral"`) e `isConfigured()`.
 - Percorre cada provedor tentando a extração, parse de JSON e validação Zod (`ReceiptAIExtractionSchema`). Em caso de falha, acumula o motivo e continua para o próximo provedor.
 - Retorna o objeto validado acrescido de `raw_ai_response`.

@@ -30,7 +30,7 @@ export async function processReceiptWithAI(
     gemini: new GeminiProvider(),
   };
 
-  const defaultOrder = ["mistral", "openrouter", "gemini"];
+  const defaultOrder = ["openrouter", "gemini", "mistral"];
   const orderEnv = process.env.AI_PROVIDER_ORDER?.trim();
   const order = orderEnv
     ? orderEnv
