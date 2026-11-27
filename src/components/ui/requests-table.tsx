@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BadgeCheck,
   Bot,
   CheckCircle,
   Download,
@@ -23,6 +24,8 @@ import {
 import {
   deleteBatchRefundRequestsAction,
   deleteRefundRequestAction,
+  markBatchRefundsAsPaidAction,
+  markRefundAsPaidAction,
   updateRefundRequestAction,
 } from "@/actions/refund.actions";
 import {
@@ -87,6 +90,8 @@ export function RequestsTable({
   onEditRequest,
   onDeleteRequest,
   onDeleteBatch,
+  onMarkAsPaid,
+  onMarkBatchAsPaid,
 }: RequestsTableProps) {
   const router = useRouter();
   const [selectedReceiptUrl, setSelectedReceiptUrl] = useState<string | null>(
@@ -103,6 +108,8 @@ export function RequestsTable({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false);
+  const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
+  const [isBatchMarkingPaid, setIsBatchMarkingPaid] = useState(false);
 
   const [editingRequest, setEditingRequest] = useState<RefundRequest | null>(
     null,
@@ -143,6 +150,67 @@ export function RequestsTable({
   const selectedApprovedRequests = requests.filter(
     (r) => selectedIds.includes(r.id) && r.status === "APPROVED",
   );
+  const selectedSentIds = selectedIds.filter(
+    (id) => requests.find((r) => r.id === id)?.status === "SENT",
+  );
+
+  const handleMarkAsPaid = async (id: string) => {
+    setMarkingPaidId(id);
+    setErrorMessage(null);
+    try {
+      if (onMarkAsPaid) {
+        await onMarkAsPaid(id);
+      } else {
+        const result = await markRefundAsPaidAction(id);
+        if (!result.success) {
+          setErrorMessage(result.error);
+        } else {
+          router.refresh?.();
+        }
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setMarkingPaidId(null);
+    }
+  };
+
+  const handleMarkBatchAsPaid = async () => {
+    if (selectedSentIds.length === 0) return;
+    setIsBatchMarkingPaid(true);
+    setErrorMessage(null);
+    try {
+      if (onMarkBatchAsPaid) {
+        await onMarkBatchAsPaid(selectedSentIds);
+        setSelectedIds((prev) =>
+          prev.filter((id) => !selectedSentIds.includes(id)),
+        );
+      } else {
+        const result = await markBatchRefundsAsPaidAction(selectedSentIds);
+        if (result.success) {
+          setSelectedIds((prev) =>
+            prev.filter((id) => !selectedSentIds.includes(id)),
+          );
+          router.refresh?.();
+        } else {
+          setErrorMessage(
+            result.error || "Erro ao marcar solicitações como pagas",
+          );
+          if (result.data?.succeeded && result.data.succeeded.length > 0) {
+            const succeededIds = result.data.succeeded.map((r) => r.id);
+            setSelectedIds((prev) =>
+              prev.filter((id) => !succeededIds.includes(id)),
+            );
+          }
+          router.refresh?.();
+        }
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsBatchMarkingPaid(false);
+    }
+  };
 
   const handleProcessBatch = async () => {
     if (selectedPendingIds.length === 0) return;
@@ -385,6 +453,17 @@ export function RequestsTable({
           </Button>
           <Button
             type="button"
+            disabled={selectedSentIds.length === 0 || isBatchMarkingPaid}
+            onClick={handleMarkBatchAsPaid}
+          >
+            {isBatchMarkingPaid && (
+              <Loader2 className="size-4 animate-spin mr-1.5" />
+            )}
+            <BadgeCheck className="size-4 mr-1.5" />
+            Marcar como Pago em Lote
+          </Button>
+          <Button
+            type="button"
             variant="destructive"
             disabled={selectedIds.length === 0 || isBulkDeleting}
             onClick={() => setIsBulkDeleteDialogOpen(true)}
@@ -457,7 +536,9 @@ export function RequestsTable({
                 const hasReceipt = Boolean(req.receipt_file_url);
                 const hasAiResponse = Boolean(req.raw_ai_response?.trim());
                 const canProcess = req.status === "PENDING";
-                const hasActions = hasReceipt || hasAiResponse || canProcess;
+                const canMarkAsPaid = req.status === "SENT";
+                const hasActions =
+                  hasReceipt || hasAiResponse || canProcess || canMarkAsPaid;
                 return (
                   <tr
                     key={req.id}
@@ -498,11 +579,16 @@ export function RequestsTable({
                     <td className="px-6 py-4">
                       <DropdownMenu>
                         <DropdownMenuTrigger
-                          disabled={!hasActions || processingId === req.id}
+                          disabled={
+                            !hasActions ||
+                            processingId === req.id ||
+                            markingPaidId === req.id
+                          }
                           aria-label={`Abrir menu de ações para ${req.requester_name}`}
                           className="inline-flex items-center justify-center rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:pointer-events-none disabled:opacity-50"
                         >
-                          {processingId === req.id ? (
+                          {processingId === req.id ||
+                          markingPaidId === req.id ? (
                             <Loader2 className="size-4 animate-spin" />
                           ) : (
                             <MoreHorizontal className="size-4" />
@@ -540,6 +626,15 @@ export function RequestsTable({
                             >
                               <CheckCircle className="size-4" />
                               Aprovar para Leitura
+                            </DropdownMenuItem>
+                          )}
+                          {canMarkAsPaid && (
+                            <DropdownMenuItem
+                              disabled={markingPaidId === req.id}
+                              onClick={() => handleMarkAsPaid(req.id)}
+                            >
+                              <BadgeCheck className="size-4" />
+                              Marcar como Pago
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuItem
