@@ -74,6 +74,8 @@ export interface RequestsTableProps {
   ) => void | Promise<void>;
   onDeleteRequest?: (requestId: string) => void | Promise<void>;
   onDeleteBatch?: (requestIds: string[]) => Promise<void> | void;
+  onMarkAsPaid?: (requestId: string) => Promise<void> | void;
+  onMarkBatchAsPaid?: (requestIds: string[]) => Promise<void> | void;
 }
 
 export function RequestsTable({

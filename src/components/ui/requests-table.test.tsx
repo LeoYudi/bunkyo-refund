@@ -36,12 +36,16 @@ vi.mock("@/actions/refund.actions", () => ({
   updateRefundRequestAction: vi.fn(),
   deleteRefundRequestAction: vi.fn(),
   deleteBatchRefundRequestsAction: vi.fn(),
+  markRefundAsPaidAction: vi.fn(),
+  markBatchRefundsAsPaidAction: vi.fn(),
 }));
 
 const {
   updateRefundRequestAction,
   deleteRefundRequestAction,
   deleteBatchRefundRequestsAction,
+  markRefundAsPaidAction,
+  markBatchRefundsAsPaidAction,
 } = refundActions as unknown as {
   updateRefundRequestAction: typeof refundActions.updateRefundRequestAction;
   deleteRefundRequestAction: typeof refundActions.deleteRefundRequestAction;
@@ -53,6 +57,8 @@ const {
     };
     error?: string;
   }>;
+  markRefundAsPaidAction: typeof refundActions.markRefundAsPaidAction;
+  markBatchRefundsAsPaidAction: typeof refundActions.markBatchRefundsAsPaidAction;
 };
 
 type RefundRequest = Database["public"]["Tables"]["refund_requests"]["Row"];
@@ -81,6 +87,14 @@ describe("RequestsTable", () => {
       success: true,
     });
     vi.mocked(deleteBatchRefundRequestsAction).mockResolvedValue({
+      success: true,
+      data: { succeeded: [], failed: [] },
+    });
+    vi.mocked(markRefundAsPaidAction).mockResolvedValue({
+      success: true,
+      data: {} as RefundRequest,
+    });
+    vi.mocked(markBatchRefundsAsPaidAction).mockResolvedValue({
       success: true,
       data: { succeeded: [], failed: [] },
     });
@@ -1432,6 +1446,566 @@ describe("RequestsTable", () => {
       expect(screen.getByText(/2 selecionado\(s\)/i)).toBeInTheDocument();
       expect(sentCb).toBeChecked();
       expect(paidCb).toBeChecked();
+    });
+  });
+
+  describe("Mark Refunds as Paid (Individual & Batch)", () => {
+    const createMockRequest = (
+      id: string,
+      requesterName: string,
+      status: RefundRequest["status"],
+      receiptUrl = `https://example.com/${id}.pdf`,
+    ): RefundRequest => ({
+      id,
+      requester_name: requesterName,
+      status,
+      created_at: new Date("2026-10-10T10:00:00Z").toISOString(),
+      updated_at: new Date("2026-10-10T10:00:00Z").toISOString(),
+      description: null,
+      issue_date: null,
+      issue_number: null,
+      issuer_cnpj: null,
+      issuer_name: null,
+      receipt_file_url: receiptUrl,
+      receiver_cnpj: null,
+      reviewed_by: "admin-1",
+      total_value: 100.0,
+    });
+
+    const markPaidMockRequests: RefundRequest[] = [
+      createMockRequest("req-pending", "Alice Pendente", "PENDING"),
+      createMockRequest("req-processing", "Diego Processando", "PROCESSING"),
+      createMockRequest("req-approved", "Bruno Aprovado", "APPROVED"),
+      createMockRequest("req-denied", "Eduarda Negada", "DENIED"),
+      createMockRequest("req-sent-1", "Felipe Enviado", "SENT"),
+      createMockRequest("req-sent-2", "Helena Enviada", "SENT"),
+      createMockRequest("req-paid", "Gabriela Paga", "PAID"),
+    ];
+
+    describe("Individual Action (3-dots menu)", () => {
+      it("should show 'Marcar como Pago' menuitem inside the 3-dots menu for a SENT request", () => {
+        render(<RequestsTable requests={[markPaidMockRequests[4]]} />);
+
+        const actionButton = screen.getByRole("button", {
+          name: /abrir menu de ações para Felipe Enviado/i,
+        });
+        fireEvent.click(actionButton);
+
+        expect(
+          screen.getByRole("menuitem", { name: /marcar como pago/i }),
+        ).toBeInTheDocument();
+      });
+
+      it("should enable the 3-dots menu button and show 'Marcar como Pago' for a SENT request even when receipt_file_url is empty", () => {
+        const sentWithoutReceipt = createMockRequest(
+          "req-sent-no-url",
+          "Igor Enviado",
+          "SENT",
+          "",
+        );
+        render(<RequestsTable requests={[sentWithoutReceipt]} />);
+
+        const actionButton = screen.getByRole("button", {
+          name: /abrir menu de ações para Igor Enviado/i,
+        });
+        expect(actionButton).not.toBeDisabled();
+
+        fireEvent.click(actionButton);
+        expect(
+          screen.getByRole("menuitem", { name: /marcar como pago/i }),
+        ).toBeInTheDocument();
+      });
+
+      it.each(["PENDING", "PROCESSING", "APPROVED", "DENIED", "PAID"] as const)(
+        "should NOT show 'Marcar como Pago' in the 3-dots menu when status is %s",
+        (status) => {
+          const req = createMockRequest(
+            `req-${status.toLowerCase()}`,
+            `User ${status}`,
+            status,
+          );
+          render(<RequestsTable requests={[req]} />);
+
+          const actionButton = screen.getByRole("button", {
+            name: new RegExp(`abrir menu de ações para User ${status}`, "i"),
+          });
+          fireEvent.click(actionButton);
+
+          expect(
+            screen.queryByRole("menuitem", { name: /marcar como pago/i }),
+          ).not.toBeInTheDocument();
+        },
+      );
+
+      it("should call markRefundAsPaidAction(req.id) directly without opening a modal when 'Marcar como Pago' is clicked", async () => {
+        const sentReq = markPaidMockRequests[4];
+        vi.mocked(markRefundAsPaidAction).mockResolvedValueOnce({
+          success: true,
+          data: { ...sentReq, status: "PAID" },
+        });
+
+        render(<RequestsTable requests={[sentReq]} />);
+
+        fireEvent.click(
+          screen.getByRole("button", {
+            name: /abrir menu de ações para Felipe Enviado/i,
+          }),
+        );
+
+        const markPaidItem = screen.getByRole("menuitem", {
+          name: /marcar como pago/i,
+        });
+
+        await act(async () => {
+          fireEvent.click(markPaidItem);
+        });
+
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+        expect(markRefundAsPaidAction).toHaveBeenCalledTimes(1);
+        expect(markRefundAsPaidAction).toHaveBeenCalledWith("req-sent-1");
+      });
+
+      it("should call onMarkAsPaid(req.id) directly without opening a modal or calling markRefundAsPaidAction when onMarkAsPaid prop is provided", async () => {
+        const sentReq = markPaidMockRequests[4];
+        const onMarkAsPaidMock = vi.fn().mockResolvedValue(undefined);
+
+        render(
+          <RequestsTable
+            requests={[sentReq]}
+            onMarkAsPaid={onMarkAsPaidMock}
+          />,
+        );
+
+        fireEvent.click(
+          screen.getByRole("button", {
+            name: /abrir menu de ações para Felipe Enviado/i,
+          }),
+        );
+
+        const markPaidItem = screen.getByRole("menuitem", {
+          name: /marcar como pago/i,
+        });
+
+        await act(async () => {
+          fireEvent.click(markPaidItem);
+        });
+
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+        expect(onMarkAsPaidMock).toHaveBeenCalledTimes(1);
+        expect(onMarkAsPaidMock).toHaveBeenCalledWith("req-sent-1");
+        expect(markRefundAsPaidAction).not.toHaveBeenCalled();
+      });
+
+      it("should show loading state (disable row action trigger) while markRefundAsPaidAction is pending and re-enable when finished", async () => {
+        const sentReq = markPaidMockRequests[4];
+        let resolvePromise!: (value: {
+          success: true;
+          data: RefundRequest;
+        }) => void;
+        const pendingPromise = new Promise<{
+          success: true;
+          data: RefundRequest;
+        }>((resolve) => {
+          resolvePromise = resolve;
+        });
+
+        vi.mocked(markRefundAsPaidAction).mockReturnValueOnce(pendingPromise);
+
+        render(<RequestsTable requests={[sentReq]} />);
+
+        const actionButton = screen.getByRole("button", {
+          name: /abrir menu de ações para Felipe Enviado/i,
+        });
+        fireEvent.click(actionButton);
+
+        const markPaidItem = screen.getByRole("menuitem", {
+          name: /marcar como pago/i,
+        });
+        fireEvent.click(markPaidItem);
+
+        expect(actionButton).toBeDisabled();
+
+        await act(async () => {
+          resolvePromise({
+            success: true,
+            data: { ...sentReq, status: "PAID" },
+          });
+        });
+
+        expect(actionButton).not.toBeDisabled();
+      });
+
+      it("should display an error alert (role='alert') when markRefundAsPaidAction returns { success: false, error }", async () => {
+        const sentReq = markPaidMockRequests[4];
+        vi.mocked(markRefundAsPaidAction).mockResolvedValueOnce({
+          success: false,
+          error:
+            "Apenas solicitações com status Enviado (SENT) podem ser marcadas como pagas",
+        });
+
+        render(<RequestsTable requests={[sentReq]} />);
+
+        fireEvent.click(
+          screen.getByRole("button", {
+            name: /abrir menu de ações para Felipe Enviado/i,
+          }),
+        );
+
+        const markPaidItem = screen.getByRole("menuitem", {
+          name: /marcar como pago/i,
+        });
+
+        await act(async () => {
+          fireEvent.click(markPaidItem);
+        });
+
+        const alert = await screen.findByRole("alert");
+        expect(alert).toBeInTheDocument();
+        expect(alert).toHaveTextContent(
+          "Apenas solicitações com status Enviado (SENT) podem ser marcadas como pagas",
+        );
+      });
+
+      it("should display an error alert (role='alert') when onMarkAsPaid rejects with an error", async () => {
+        const sentReq = markPaidMockRequests[4];
+        const onMarkAsPaidMock = vi
+          .fn()
+          .mockRejectedValueOnce(new Error("Erro ao marcar solicitação"));
+
+        render(
+          <RequestsTable
+            requests={[sentReq]}
+            onMarkAsPaid={onMarkAsPaidMock}
+          />,
+        );
+
+        fireEvent.click(
+          screen.getByRole("button", {
+            name: /abrir menu de ações para Felipe Enviado/i,
+          }),
+        );
+
+        const markPaidItem = screen.getByRole("menuitem", {
+          name: /marcar como pago/i,
+        });
+
+        await act(async () => {
+          fireEvent.click(markPaidItem);
+        });
+
+        const alert = await screen.findByRole("alert");
+        expect(alert).toBeInTheDocument();
+        expect(alert).toHaveTextContent("Erro ao marcar solicitação");
+      });
+    });
+
+    describe("Batch Action (Top Bar - 'Marcar como Pago em Lote')", () => {
+      it("should render 'Marcar como Pago em Lote' button disabled initially when 0 selecionado(s)", () => {
+        render(<RequestsTable requests={markPaidMockRequests} />);
+
+        const batchPayButton = screen.getByRole("button", {
+          name: /marcar como pago em lote/i,
+        });
+        expect(batchPayButton).toBeInTheDocument();
+        expect(batchPayButton).toBeDisabled();
+      });
+
+      it("should keep 'Marcar como Pago em Lote' disabled when only non-SENT rows (PENDING, PROCESSING, APPROVED, DENIED, PAID) are selected", () => {
+        render(<RequestsTable requests={markPaidMockRequests} />);
+
+        fireEvent.click(
+          screen.getByRole("checkbox", { name: /Alice Pendente/i }),
+        );
+        fireEvent.click(
+          screen.getByRole("checkbox", { name: /Diego Processando/i }),
+        );
+        fireEvent.click(
+          screen.getByRole("checkbox", { name: /Bruno Aprovado/i }),
+        );
+        fireEvent.click(
+          screen.getByRole("checkbox", { name: /Eduarda Negada/i }),
+        );
+        fireEvent.click(
+          screen.getByRole("checkbox", { name: /Gabriela Paga/i }),
+        );
+
+        expect(screen.getByText(/5 selecionado\(s\)/i)).toBeInTheDocument();
+
+        const batchPayButton = screen.getByRole("button", {
+          name: /marcar como pago em lote/i,
+        });
+        expect(batchPayButton).toBeDisabled();
+      });
+
+      it("should enable 'Marcar como Pago em Lote' when 1 or more SENT requests are selected", () => {
+        render(<RequestsTable requests={markPaidMockRequests} />);
+
+        const batchPayButton = screen.getByRole("button", {
+          name: /marcar como pago em lote/i,
+        });
+        expect(batchPayButton).toBeDisabled();
+
+        fireEvent.click(
+          screen.getByRole("checkbox", { name: /Felipe Enviado/i }),
+        );
+
+        expect(batchPayButton).not.toBeDisabled();
+      });
+
+      it("should call markBatchRefundsAsPaidAction directly (without modal) sending ONLY selected SENT IDs and clear only processed SENT IDs from selection", async () => {
+        const sent1 = markPaidMockRequests[4];
+        const sent2 = markPaidMockRequests[5];
+        vi.mocked(markBatchRefundsAsPaidAction).mockResolvedValueOnce({
+          success: true,
+          data: {
+            succeeded: [
+              { ...sent1, status: "PAID" },
+              { ...sent2, status: "PAID" },
+            ],
+            failed: [],
+          },
+        });
+
+        render(<RequestsTable requests={markPaidMockRequests} />);
+
+        const pendingCb = screen.getByRole("checkbox", {
+          name: /Alice Pendente/i,
+        });
+        const approvedCb = screen.getByRole("checkbox", {
+          name: /Bruno Aprovado/i,
+        });
+        const sent1Cb = screen.getByRole("checkbox", {
+          name: /Felipe Enviado/i,
+        });
+        const sent2Cb = screen.getByRole("checkbox", {
+          name: /Helena Enviada/i,
+        });
+
+        fireEvent.click(pendingCb);
+        fireEvent.click(approvedCb);
+        fireEvent.click(sent1Cb);
+        fireEvent.click(sent2Cb);
+        expect(screen.getByText(/4 selecionado\(s\)/i)).toBeInTheDocument();
+
+        const batchPayButton = screen.getByRole("button", {
+          name: /marcar como pago em lote/i,
+        });
+
+        await act(async () => {
+          fireEvent.click(batchPayButton);
+        });
+
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+        expect(markBatchRefundsAsPaidAction).toHaveBeenCalledTimes(1);
+        expect(markBatchRefundsAsPaidAction).toHaveBeenCalledWith([
+          "req-sent-1",
+          "req-sent-2",
+        ]);
+        expect(sent1Cb).not.toBeChecked();
+        expect(sent2Cb).not.toBeChecked();
+        expect(pendingCb).toBeChecked();
+        expect(approvedCb).toBeChecked();
+        expect(screen.getByText(/2 selecionado\(s\)/i)).toBeInTheDocument();
+      });
+
+      it("should call onMarkBatchAsPaid directly (without modal or calling markBatchRefundsAsPaidAction) sending ONLY selected SENT IDs and clear processed SENT IDs when onMarkBatchAsPaid prop is provided", async () => {
+        const onMarkBatchAsPaidMock = vi.fn().mockResolvedValue(undefined);
+
+        render(
+          <RequestsTable
+            requests={markPaidMockRequests}
+            onMarkBatchAsPaid={onMarkBatchAsPaidMock}
+          />,
+        );
+
+        const approvedCb = screen.getByRole("checkbox", {
+          name: /Bruno Aprovado/i,
+        });
+        const sent1Cb = screen.getByRole("checkbox", {
+          name: /Felipe Enviado/i,
+        });
+
+        fireEvent.click(approvedCb);
+        fireEvent.click(sent1Cb);
+        expect(screen.getByText(/2 selecionado\(s\)/i)).toBeInTheDocument();
+
+        const batchPayButton = screen.getByRole("button", {
+          name: /marcar como pago em lote/i,
+        });
+
+        await act(async () => {
+          fireEvent.click(batchPayButton);
+        });
+
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+        expect(onMarkBatchAsPaidMock).toHaveBeenCalledTimes(1);
+        expect(onMarkBatchAsPaidMock).toHaveBeenCalledWith(["req-sent-1"]);
+        expect(markBatchRefundsAsPaidAction).not.toHaveBeenCalled();
+        expect(sent1Cb).not.toBeChecked();
+        expect(approvedCb).toBeChecked();
+        expect(screen.getByText(/1 selecionado\(s\)/i)).toBeInTheDocument();
+      });
+
+      it("should show loading state (disable button and render spinner) while markBatchRefundsAsPaidAction is pending", async () => {
+        const sent1 = markPaidMockRequests[4];
+        let resolvePromise!: (value: {
+          success: boolean;
+          data?: {
+            succeeded: RefundRequest[];
+            failed: Array<{ id: string; error: string }>;
+          };
+          error?: string;
+        }) => void;
+        const pendingPromise = new Promise<{
+          success: boolean;
+          data?: {
+            succeeded: RefundRequest[];
+            failed: Array<{ id: string; error: string }>;
+          };
+          error?: string;
+        }>((resolve) => {
+          resolvePromise = resolve;
+        });
+
+        vi.mocked(markBatchRefundsAsPaidAction).mockReturnValueOnce(
+          pendingPromise,
+        );
+
+        render(<RequestsTable requests={markPaidMockRequests} />);
+
+        fireEvent.click(
+          screen.getByRole("checkbox", { name: /Felipe Enviado/i }),
+        );
+
+        const batchPayButton = screen.getByRole("button", {
+          name: /marcar como pago em lote/i,
+        });
+        fireEvent.click(batchPayButton);
+
+        expect(batchPayButton).toBeDisabled();
+        expect(
+          batchPayButton.querySelector(".animate-spin"),
+        ).toBeInTheDocument();
+
+        await act(async () => {
+          resolvePromise({
+            success: true,
+            data: {
+              succeeded: [{ ...sent1, status: "PAID" }],
+              failed: [],
+            },
+          });
+        });
+
+        expect(
+          batchPayButton.querySelector(".animate-spin"),
+        ).not.toBeInTheDocument();
+      });
+
+      it("should display error alert (role='alert') and remove only succeeded SENT IDs from selection when markBatchRefundsAsPaidAction returns partial failure", async () => {
+        const sent1 = markPaidMockRequests[4];
+        vi.mocked(markBatchRefundsAsPaidAction).mockResolvedValueOnce({
+          success: false,
+          data: {
+            succeeded: [{ ...sent1, status: "PAID" }],
+            failed: [
+              { id: "req-sent-2", error: "Erro ao atualizar req-sent-2" },
+            ],
+          },
+          error:
+            "Falha ao marcar 1 solicitação(ões) como paga(s): Erro ao atualizar req-sent-2",
+        });
+
+        render(<RequestsTable requests={markPaidMockRequests} />);
+
+        const approvedCb = screen.getByRole("checkbox", {
+          name: /Bruno Aprovado/i,
+        });
+        const sent1Cb = screen.getByRole("checkbox", {
+          name: /Felipe Enviado/i,
+        });
+        const sent2Cb = screen.getByRole("checkbox", {
+          name: /Helena Enviada/i,
+        });
+
+        fireEvent.click(approvedCb);
+        fireEvent.click(sent1Cb);
+        fireEvent.click(sent2Cb);
+        expect(screen.getByText(/3 selecionado\(s\)/i)).toBeInTheDocument();
+
+        await act(async () => {
+          fireEvent.click(
+            screen.getByRole("button", { name: /marcar como pago em lote/i }),
+          );
+        });
+
+        const alert = await screen.findByRole("alert");
+        expect(alert).toBeInTheDocument();
+        expect(alert).toHaveTextContent("Erro ao atualizar req-sent-2");
+        expect(sent1Cb).not.toBeChecked();
+        expect(sent2Cb).toBeChecked();
+        expect(approvedCb).toBeChecked();
+        expect(screen.getByText(/2 selecionado\(s\)/i)).toBeInTheDocument();
+      });
+
+      it("should display error alert (role='alert') and keep all selected IDs when markBatchRefundsAsPaidAction returns an error without data", async () => {
+        vi.mocked(markBatchRefundsAsPaidAction).mockResolvedValueOnce({
+          success: false,
+          error: "Erro inesperado ao marcar solicitações como pagas",
+        });
+
+        render(<RequestsTable requests={markPaidMockRequests} />);
+
+        const sent1Cb = screen.getByRole("checkbox", {
+          name: /Felipe Enviado/i,
+        });
+        const sent2Cb = screen.getByRole("checkbox", {
+          name: /Helena Enviada/i,
+        });
+
+        fireEvent.click(sent1Cb);
+        fireEvent.click(sent2Cb);
+
+        await act(async () => {
+          fireEvent.click(
+            screen.getByRole("button", { name: /marcar como pago em lote/i }),
+          );
+        });
+
+        const alert = await screen.findByRole("alert");
+        expect(alert).toBeInTheDocument();
+        expect(alert).toHaveTextContent(
+          "Erro inesperado ao marcar solicitações como pagas",
+        );
+        expect(sent1Cb).toBeChecked();
+        expect(sent2Cb).toBeChecked();
+        expect(screen.getByText(/2 selecionado\(s\)/i)).toBeInTheDocument();
+      });
+
+      it("should display error alert (role='alert') and keep all selected IDs when markBatchRefundsAsPaidAction rejects with an exception", async () => {
+        vi.mocked(markBatchRefundsAsPaidAction).mockRejectedValueOnce(
+          new Error("Falha de comunicação com o servidor"),
+        );
+
+        render(<RequestsTable requests={markPaidMockRequests} />);
+
+        const sent1Cb = screen.getByRole("checkbox", {
+          name: /Felipe Enviado/i,
+        });
+        fireEvent.click(sent1Cb);
+
+        await act(async () => {
+          fireEvent.click(
+            screen.getByRole("button", { name: /marcar como pago em lote/i }),
+          );
+        });
+
+        const alert = await screen.findByRole("alert");
+        expect(alert).toBeInTheDocument();
+        expect(alert).toHaveTextContent("Falha de comunicação com o servidor");
+        expect(sent1Cb).toBeChecked();
+        expect(screen.getByText(/1 selecionado\(s\)/i)).toBeInTheDocument();
+      });
     });
   });
 });

@@ -302,4 +302,15 @@ export class RefundService {
 
     return { succeeded, failed };
   }
+
+  async markAsPaid(_requestId: string): Promise<RefundRequest> {
+    throw new Error("Not implemented");
+  }
+
+  async markBatchAsPaid(_requestIds: string[]): Promise<{
+    succeeded: RefundRequest[];
+    failed: Array<{ id: string; error: string }>;
+  }> {
+    throw new Error("Not implemented");
+  }
 }

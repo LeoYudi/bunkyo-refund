@@ -126,3 +126,24 @@ export async function deleteBatchRefundRequestsAction(
     return { success: false, error: errorMessage };
   }
 }
+
+export async function markRefundAsPaidAction(
+  _id: string,
+): Promise<
+  { success: true; data: RefundRequest } | { success: false; error: string }
+> {
+  throw new Error("Not implemented");
+}
+
+export async function markBatchRefundsAsPaidAction(
+  _requestIds: string[],
+): Promise<{
+  success: boolean;
+  data?: {
+    succeeded: RefundRequest[];
+    failed: Array<{ id: string; error: string }>;
+  };
+  error?: string;
+}> {
+  throw new Error("Not implemented");
+}
