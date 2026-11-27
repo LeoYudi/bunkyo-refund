@@ -54,30 +54,57 @@ export class GeminiProvider implements AIProvider {
       },
     };
 
-    const interaction = await ai.interactions.create({
-      model: "gemini-3.8-flash",
-      input: [
-        {
-          type: "text",
-          text: prompt,
-        },
-        {
-          type: fileInputType,
-          data: base64Data,
-          mime_type: mimeType,
-        } as unknown as { type: "text"; text: string },
-      ],
-      response_format,
-    });
+    const DEFAULT_GEMINI_MODELS = [
+      "gemini-3.8-flash",
+      "gemini-3.6-flash",
+      "gemini-3.5-flash-lite",
+      "gemini-3.1-flash-lite",
+    ];
 
-    const outputText = interaction.output_text;
-    if (!outputText?.trim()) {
-      throw new Error("A IA não retornou nenhum texto.");
+    const envModels = process.env.GEMINI_MODELS;
+    const models = envModels
+      ? envModels
+          .split(",")
+          .map((m) => m.trim())
+          .filter(Boolean)
+      : [];
+    const activeModels = models.length > 0 ? models : DEFAULT_GEMINI_MODELS;
+
+    const errors: string[] = [];
+
+    for (const model of activeModels) {
+      try {
+        const interaction = await ai.interactions.create({
+          model,
+          input: [
+            {
+              type: "text",
+              text: prompt,
+            },
+            {
+              type: fileInputType,
+              data: base64Data,
+              mime_type: mimeType,
+            } as unknown as { type: "text"; text: string },
+          ],
+          response_format,
+        });
+
+        const outputText = interaction.output_text;
+        if (!outputText?.trim()) {
+          throw new Error("A IA não retornou nenhum texto.");
+        }
+
+        return {
+          provider: "gemini",
+          rawText: outputText,
+        };
+      } catch (err: unknown) {
+        const errMessage = err instanceof Error ? err.message : String(err);
+        errors.push(`[${model}]: ${errMessage}`);
+      }
     }
 
-    return {
-      provider: "gemini",
-      rawText: outputText,
-    };
+    throw new Error(`Todos os modelos Gemini falharam: ${errors.join(" | ")}`);
   }
 }

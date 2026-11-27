@@ -54,6 +54,9 @@ export class OpenRouterProvider implements AIProvider {
         },
         body: JSON.stringify({
           model,
+          ...(mimeType === "application/pdf" && {
+            plugins: [{ id: "file-parser", pdf: { engine: "cloudflare-ai" } }],
+          }),
           response_format: { type: "json_object" },
           messages: [
             {

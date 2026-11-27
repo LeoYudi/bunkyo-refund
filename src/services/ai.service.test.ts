@@ -411,7 +411,9 @@ describe("ai.service.ts - processReceiptWithAI (Multi-Provider Fallback)", () =>
       });
 
       mockInteractions.create.mockImplementation(async () => {
-        callOrder.push("gemini");
+        if (callOrder[callOrder.length - 1] !== "gemini") {
+          callOrder.push("gemini");
+        }
         throw new Error("Gemini upstream error (500)");
       });
 
@@ -734,7 +736,9 @@ describe("ai.service.ts - processReceiptWithAI (Multi-Provider Fallback)", () =>
       });
 
       mockInteractions.create.mockImplementation(async () => {
-        callOrder.push("gemini");
+        if (callOrder[callOrder.length - 1] !== "gemini") {
+          callOrder.push("gemini");
+        }
         return { output_text: null };
       });
 
