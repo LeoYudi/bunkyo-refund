@@ -78,6 +78,25 @@ export function BatchPaymentDialog({
     defaultSettings?.sender_phone ?? "(16) 99332-8607",
   );
 
+  React.useEffect(() => {
+    if (!isOpen || !defaultSettings) return;
+    setRecipientEmail(defaultSettings.recipient_email ?? "");
+    setCcEmail(defaultSettings.cc_email ?? "");
+    setBccEmail(defaultSettings.bcc_email ?? "");
+    setSubject(defaultSettings.subject_prefix ?? "");
+    setEventDescription(defaultSettings.default_event_description ?? "");
+    setApproverEmail(
+      defaultSettings.approver_email ?? "jaque.hanaoka@gmail.com",
+    );
+    setSenderName(defaultSettings.sender_name ?? "Lucas Tamanaha");
+    setSenderRole(
+      defaultSettings.sender_role ??
+        "Diretor Financeiro da Comissão de Jovens do Bunkyo - Gestão 2026",
+    );
+    setSenderEmail(defaultSettings.sender_email ?? "jovens@bunkyo.org.br");
+    setSenderPhone(defaultSettings.sender_phone ?? "(16) 99332-8607");
+  }, [isOpen, defaultSettings]);
+
   const currencyFormatter = new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",

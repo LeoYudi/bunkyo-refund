@@ -1,6 +1,7 @@
 import { getRefundRequestsAction } from "@/actions/refund.actions";
 import { RequestsTable } from "@/components/ui/requests-table";
 import { StatusLifecycle } from "@/components/ui/status-lifecycle";
+import { SettingsService } from "@/services/settings.service";
 
 export default async function AdminDashboardPage() {
   const result = await getRefundRequestsAction();
@@ -15,6 +16,9 @@ export default async function AdminDashboardPage() {
       </div>
     );
   }
+
+  const settingsService = new SettingsService();
+  const defaultEmailSettings = await settingsService.getEmailSettings();
 
   const requests = result.data || [];
 
@@ -33,7 +37,10 @@ export default async function AdminDashboardPage() {
       </div>
 
       <div className="bg-card border rounded-lg overflow-hidden shadow-sm">
-        <RequestsTable requests={requests} />
+        <RequestsTable
+          requests={requests}
+          defaultEmailSettings={defaultEmailSettings}
+        />
       </div>
     </div>
   );

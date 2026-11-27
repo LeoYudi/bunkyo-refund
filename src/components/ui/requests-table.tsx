@@ -80,6 +80,7 @@ export interface RequestsTableProps {
 
 export function RequestsTable({
   requests,
+  defaultEmailSettings,
   onProcessRequest,
   onProcessBatch,
   onConfirmBatch,
@@ -639,6 +640,7 @@ export function RequestsTable({
           isOpen={isBatchDialogOpen}
           onClose={() => setIsBatchDialogOpen(false)}
           selectedRequests={selectedApprovedRequests}
+          defaultSettings={defaultEmailSettings}
           onConfirm={handleConfirmBatch}
         />
 
