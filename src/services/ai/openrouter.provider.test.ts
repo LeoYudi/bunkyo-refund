@@ -95,7 +95,7 @@ describe("OpenRouterProvider", () => {
 
     const samplePayloadJson = JSON.stringify(samplePayloadObj);
 
-    it("extracts data from image/jpeg using default OpenRouter model and image_url object format", async () => {
+    it("extracts data from image/jpeg using default OpenRouter model ('openrouter/free') and image_url object format", async () => {
       process.env.OPENROUTER_API_KEY = "sk-or-v1-image";
       const fetchMock = vi.fn().mockResolvedValue(
         createFetchResponse({
@@ -129,7 +129,7 @@ describe("OpenRouterProvider", () => {
       );
 
       const body = JSON.parse(init.body as string) as OpenRouterRequestBody;
-      expect(body.model).toBe("mistralai/mistral-small-3.1-24b-instruct:free");
+      expect(body.model).toBe("openrouter/free");
       expect(body.response_format).toEqual({ type: "json_object" });
 
       const contentParts = body.messages.flatMap((m) =>
@@ -174,7 +174,34 @@ describe("OpenRouterProvider", () => {
       expect(body.model).toBe("google/gemini-2.0-flash-exp:free");
     });
 
-    it("sends file block with receipt.pdf for application/pdf", async () => {
+    it("falls back to 'openrouter/free' when OPENROUTER_MODEL is empty or whitespace", async () => {
+      process.env.OPENROUTER_API_KEY = "sk-or-v1-whitespace";
+      process.env.OPENROUTER_MODEL = "   ";
+
+      const fetchMock = vi.fn().mockResolvedValue(
+        createFetchResponse({
+          ok: true,
+          status: 200,
+          jsonData: {
+            choices: [{ message: { content: samplePayloadJson } }],
+          },
+        }),
+      );
+      global.fetch = fetchMock;
+
+      const provider = new OpenRouterProvider();
+      await provider.extract({
+        base64Data: "abc",
+        mimeType: "image/png",
+        prompt: samplePrompt,
+      });
+
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(init.body as string) as OpenRouterRequestBody;
+      expect(body.model).toBe("openrouter/free");
+    });
+
+    it("sends file block with receipt.pdf for application/pdf using default model 'openrouter/free'", async () => {
       process.env.OPENROUTER_API_KEY = "sk-or-v1-pdf";
       const fetchMock = vi.fn().mockResolvedValue(
         createFetchResponse({
@@ -201,7 +228,7 @@ describe("OpenRouterProvider", () => {
       expect(url).toBe("https://openrouter.ai/api/v1/chat/completions");
 
       const body = JSON.parse(init.body as string) as OpenRouterRequestBody;
-      expect(body.model).toBe("mistralai/mistral-small-3.1-24b-instruct:free");
+      expect(body.model).toBe("openrouter/free");
 
       const contentParts = body.messages.flatMap((m) =>
         Array.isArray(m.content) ? m.content : [],

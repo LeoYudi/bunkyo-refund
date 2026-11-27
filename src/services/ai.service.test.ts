@@ -191,10 +191,8 @@ describe("ai.service.ts - processReceiptWithAI (Multi-Provider Fallback)", () =>
       ]);
     });
 
-    it("processes PDF receipts via Mistral OCR + Chat Completions when Mistral is configured", async () => {
+    it("processes PDF receipts via Mistral OCR + Chat Completions when only Mistral is configured", async () => {
       process.env.MISTRAL_API_KEY = "sk-mistral";
-      process.env.OPENROUTER_API_KEY = "sk-openrouter";
-      process.env.GEMINI_API_KEY = "sk-gemini";
       mockDownloadedFile("dummy-pdf-data");
 
       const rawResponse = JSON.stringify(sampleReceiptPayload);
@@ -243,11 +241,11 @@ describe("ai.service.ts - processReceiptWithAI (Multi-Provider Fallback)", () =>
     });
   });
 
-  describe("Default priority order (mistral -> openrouter -> gemini)", () => {
-    it("uses Mistral and does NOT call OpenRouter or Gemini when MISTRAL_API_KEY is configured and succeeds", async () => {
-      process.env.MISTRAL_API_KEY = "sk-mistral";
+  describe("Default priority order (openrouter -> gemini -> mistral)", () => {
+    it("uses OpenRouter and does NOT call Gemini or Mistral when OPENROUTER_API_KEY is configured and succeeds", async () => {
       process.env.OPENROUTER_API_KEY = "sk-openrouter";
       process.env.GEMINI_API_KEY = "sk-gemini";
+      process.env.MISTRAL_API_KEY = "sk-mistral";
       mockDownloadedFile("dummy-image-data");
 
       const rawResponse = JSON.stringify(sampleReceiptPayload);
@@ -273,7 +271,7 @@ describe("ai.service.ts - processReceiptWithAI (Multi-Provider Fallback)", () =>
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(fetchMock.mock.calls[0]?.[0]).toBe(
-        "https://api.mistral.ai/v1/chat/completions",
+        "https://openrouter.ai/api/v1/chat/completions",
       );
       expect(GoogleGenAI).not.toHaveBeenCalled();
 
@@ -283,92 +281,31 @@ describe("ai.service.ts - processReceiptWithAI (Multi-Provider Fallback)", () =>
       });
     });
 
-    it("falls back automatically to OpenRouter when Mistral fails with 429 Rate Limit", async () => {
-      process.env.MISTRAL_API_KEY = "sk-mistral";
+    it("falls back automatically to Gemini when OpenRouter fails with 429 Rate Limit", async () => {
       process.env.OPENROUTER_API_KEY = "sk-openrouter";
       process.env.GEMINI_API_KEY = "sk-gemini";
+      process.env.MISTRAL_API_KEY = "sk-mistral";
       mockDownloadedFile("dummy-image-data");
 
-      const openRouterJson = JSON.stringify({
+      const geminiJson = JSON.stringify({
         ...sampleReceiptPayload,
-        issuer_name: "Loja OpenRouter",
+        issuer_name: "Loja Gemini",
         issue_date: "20/03/2026",
       });
       const callOrder: string[] = [];
 
       fetchMock.mockImplementation(async (url: string) => {
-        if (url === "https://api.mistral.ai/v1/chat/completions") {
-          callOrder.push("mistral");
+        if (url === "https://openrouter.ai/api/v1/chat/completions") {
+          callOrder.push("openrouter");
           return createFetchResponse({
             ok: false,
             status: 429,
             textData: "Rate limit exceeded",
           });
         }
-        if (url === "https://openrouter.ai/api/v1/chat/completions") {
-          callOrder.push("openrouter");
-          return createFetchResponse({
-            ok: true,
-            status: 200,
-            jsonData: {
-              choices: [
-                {
-                  message: { content: `\`\`\`json\n${openRouterJson}\n\`\`\`` },
-                },
-              ],
-            },
-          });
-        }
         throw new Error(`Unexpected fetch URL: ${url}`);
       });
 
-      const result = await processReceiptWithAI(
-        "receipts/123.jpg",
-        "image/jpeg",
-      );
-
-      expect(callOrder).toEqual(["mistral", "openrouter"]);
-      expect(GoogleGenAI).not.toHaveBeenCalled();
-      expect(result).toEqual({
-        ...sampleReceiptPayload,
-        issuer_name: "Loja OpenRouter",
-        issue_date: "2026-03-20",
-        raw_ai_response: openRouterJson,
-      });
-    });
-
-    it("falls back automatically to Gemini when both Mistral and OpenRouter fail", async () => {
-      process.env.MISTRAL_API_KEY = "sk-mistral";
-      process.env.OPENROUTER_API_KEY = "sk-openrouter";
-      process.env.GEMINI_API_KEY = "sk-gemini";
-      mockDownloadedFile("dummy-image-data");
-
-      const callOrder: string[] = [];
-
-      fetchMock.mockImplementation(async (url: string) => {
-        if (url === "https://api.mistral.ai/v1/chat/completions") {
-          callOrder.push("mistral");
-          return createFetchResponse({
-            ok: false,
-            status: 429,
-            textData: "Rate limit exceeded",
-          });
-        }
-        if (url === "https://openrouter.ai/api/v1/chat/completions") {
-          callOrder.push("openrouter");
-          return createFetchResponse({
-            ok: false,
-            status: 500,
-            textData: "Upstream error",
-          });
-        }
-        throw new Error(`Unexpected fetch URL: ${url}`);
-      });
-
-      const geminiJson = JSON.stringify({
-        ...sampleReceiptPayload,
-        issuer_name: "Loja Gemini",
-      });
       mockInteractions.create.mockImplementation(async () => {
         callOrder.push("gemini");
         return { output_text: geminiJson };
@@ -379,16 +316,103 @@ describe("ai.service.ts - processReceiptWithAI (Multi-Provider Fallback)", () =>
         "image/jpeg",
       );
 
-      expect(callOrder).toEqual(["mistral", "openrouter", "gemini"]);
+      expect(callOrder).toEqual(["openrouter", "gemini"]);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(GoogleGenAI).toHaveBeenCalledWith({ apiVersion: "v1beta" });
       expect(result).toEqual({
         ...sampleReceiptPayload,
         issuer_name: "Loja Gemini",
+        issue_date: "2026-03-20",
         raw_ai_response: geminiJson,
       });
     });
 
-    it("skips unconfigured Mistral and OpenRouter and uses Gemini directly when only GEMINI_API_KEY is configured", async () => {
+    it("falls back automatically to Mistral when both OpenRouter and Gemini fail", async () => {
+      process.env.OPENROUTER_API_KEY = "sk-openrouter";
       process.env.GEMINI_API_KEY = "sk-gemini";
+      process.env.MISTRAL_API_KEY = "sk-mistral";
+      mockDownloadedFile("dummy-image-data");
+
+      const callOrder: string[] = [];
+      const mistralJson = JSON.stringify({
+        ...sampleReceiptPayload,
+        issuer_name: "Loja Mistral",
+      });
+
+      fetchMock.mockImplementation(async (url: string) => {
+        if (url === "https://openrouter.ai/api/v1/chat/completions") {
+          callOrder.push("openrouter");
+          return createFetchResponse({
+            ok: false,
+            status: 429,
+            textData: "Rate limit exceeded",
+          });
+        }
+        if (url === "https://api.mistral.ai/v1/chat/completions") {
+          callOrder.push("mistral");
+          return createFetchResponse({
+            ok: true,
+            status: 200,
+            jsonData: {
+              choices: [{ message: { content: mistralJson } }],
+            },
+          });
+        }
+        throw new Error(`Unexpected fetch URL: ${url}`);
+      });
+
+      mockInteractions.create.mockImplementation(async () => {
+        callOrder.push("gemini");
+        throw new Error("Gemini upstream error (500)");
+      });
+
+      const result = await processReceiptWithAI(
+        "receipts/123.jpg",
+        "image/jpeg",
+      );
+
+      expect(callOrder).toEqual(["openrouter", "gemini", "mistral"]);
+      expect(result).toEqual({
+        ...sampleReceiptPayload,
+        issuer_name: "Loja Mistral",
+        raw_ai_response: mistralJson,
+      });
+    });
+
+    it("skips unconfigured OpenRouter and Gemini and uses Mistral directly when only MISTRAL_API_KEY is configured", async () => {
+      process.env.MISTRAL_API_KEY = "sk-mistral";
+      mockDownloadedFile("dummy-image-data");
+
+      const mistralJson = JSON.stringify(sampleReceiptPayload);
+      fetchMock.mockResolvedValueOnce(
+        createFetchResponse({
+          ok: true,
+          status: 200,
+          jsonData: {
+            choices: [{ message: { content: mistralJson } }],
+          },
+        }),
+      );
+
+      const result = await processReceiptWithAI(
+        "receipts/123.jpg",
+        "image/jpeg",
+      );
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0]?.[0]).toBe(
+        "https://api.mistral.ai/v1/chat/completions",
+      );
+      expect(GoogleGenAI).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        ...sampleReceiptPayload,
+        raw_ai_response: mistralJson,
+      });
+    });
+
+    it("skips unconfigured OpenRouter and uses Gemini directly when only GEMINI_API_KEY and MISTRAL_API_KEY are configured", async () => {
+      process.env.GEMINI_API_KEY = "sk-gemini";
+      process.env.MISTRAL_API_KEY = "sk-mistral";
       mockDownloadedFile("dummy-pdf-data");
 
       const geminiJson = JSON.stringify(sampleReceiptPayload);
@@ -409,9 +433,11 @@ describe("ai.service.ts - processReceiptWithAI (Multi-Provider Fallback)", () =>
       });
     });
 
-    it("skips unconfigured Mistral and uses OpenRouter when only OPENROUTER_API_KEY and GEMINI_API_KEY are configured", async () => {
+    it("uses default order (openrouter -> gemini -> mistral) when AI_PROVIDER_ORDER is empty or whitespace", async () => {
       process.env.OPENROUTER_API_KEY = "sk-openrouter";
       process.env.GEMINI_API_KEY = "sk-gemini";
+      process.env.MISTRAL_API_KEY = "sk-mistral";
+      process.env.AI_PROVIDER_ORDER = "   ";
       mockDownloadedFile("dummy-image-data");
 
       const openRouterJson = JSON.stringify(sampleReceiptPayload);
@@ -443,16 +469,16 @@ describe("ai.service.ts - processReceiptWithAI (Multi-Provider Fallback)", () =>
   });
 
   describe("Custom provider priority order (AI_PROVIDER_ORDER)", () => {
-    it("respects AI_PROVIDER_ORDER='openrouter,mistral,gemini' and calls OpenRouter first", async () => {
+    it("respects AI_PROVIDER_ORDER='mistral,gemini,openrouter' and calls Mistral first", async () => {
       process.env.MISTRAL_API_KEY = "sk-mistral";
       process.env.OPENROUTER_API_KEY = "sk-openrouter";
       process.env.GEMINI_API_KEY = "sk-gemini";
-      process.env.AI_PROVIDER_ORDER = "openrouter,mistral,gemini";
+      process.env.AI_PROVIDER_ORDER = "mistral,gemini,openrouter";
       mockDownloadedFile("dummy-image-data");
 
-      const openRouterJson = JSON.stringify({
+      const mistralJson = JSON.stringify({
         ...sampleReceiptPayload,
-        issuer_name: "Primeiro OpenRouter",
+        issuer_name: "Primeiro Mistral",
       });
 
       fetchMock.mockResolvedValueOnce(
@@ -460,7 +486,7 @@ describe("ai.service.ts - processReceiptWithAI (Multi-Provider Fallback)", () =>
           ok: true,
           status: 200,
           jsonData: {
-            choices: [{ message: { content: openRouterJson } }],
+            choices: [{ message: { content: mistralJson } }],
           },
         }),
       );
@@ -472,13 +498,13 @@ describe("ai.service.ts - processReceiptWithAI (Multi-Provider Fallback)", () =>
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(fetchMock.mock.calls[0]?.[0]).toBe(
-        "https://openrouter.ai/api/v1/chat/completions",
+        "https://api.mistral.ai/v1/chat/completions",
       );
       expect(GoogleGenAI).not.toHaveBeenCalled();
-      expect(result.issuer_name).toBe("Primeiro OpenRouter");
+      expect(result.issuer_name).toBe("Primeiro Mistral");
     });
 
-    it("falls back according to custom AI_PROVIDER_ORDER='openrouter,mistral,gemini' (OpenRouter fails -> Mistral)", async () => {
+    it("falls back according to custom AI_PROVIDER_ORDER='openrouter,mistral,gemini' (OpenRouter fails -> Mistral, skipping Gemini)", async () => {
       process.env.MISTRAL_API_KEY = "sk-mistral";
       process.env.OPENROUTER_API_KEY = "sk-openrouter";
       process.env.GEMINI_API_KEY = "sk-gemini";
@@ -526,16 +552,16 @@ describe("ai.service.ts - processReceiptWithAI (Multi-Provider Fallback)", () =>
 
   describe("Fallback on invalid JSON or Zod validation failure", () => {
     it("falls back to the next configured provider when a provider returns malformed JSON", async () => {
-      process.env.MISTRAL_API_KEY = "sk-mistral";
       process.env.OPENROUTER_API_KEY = "sk-openrouter";
+      process.env.MISTRAL_API_KEY = "sk-mistral";
       mockDownloadedFile("dummy-image-data");
 
       const validJson = JSON.stringify(sampleReceiptPayload);
       const callOrder: string[] = [];
 
       fetchMock.mockImplementation(async (url: string) => {
-        if (url === "https://api.mistral.ai/v1/chat/completions") {
-          callOrder.push("mistral");
+        if (url === "https://openrouter.ai/api/v1/chat/completions") {
+          callOrder.push("openrouter");
           return createFetchResponse({
             ok: true,
             status: 200,
@@ -544,8 +570,8 @@ describe("ai.service.ts - processReceiptWithAI (Multi-Provider Fallback)", () =>
             },
           });
         }
-        if (url === "https://openrouter.ai/api/v1/chat/completions") {
-          callOrder.push("openrouter");
+        if (url === "https://api.mistral.ai/v1/chat/completions") {
+          callOrder.push("mistral");
           return createFetchResponse({
             ok: true,
             status: 200,
@@ -562,7 +588,7 @@ describe("ai.service.ts - processReceiptWithAI (Multi-Provider Fallback)", () =>
         "image/jpeg",
       );
 
-      expect(callOrder).toEqual(["mistral", "openrouter"]);
+      expect(callOrder).toEqual(["openrouter", "mistral"]);
       expect(result).toEqual({
         ...sampleReceiptPayload,
         raw_ai_response: validJson,
@@ -570,8 +596,8 @@ describe("ai.service.ts - processReceiptWithAI (Multi-Provider Fallback)", () =>
     });
 
     it("falls back to the next configured provider when a provider returns JSON that fails ReceiptAIExtractionSchema validation", async () => {
-      process.env.MISTRAL_API_KEY = "sk-mistral";
       process.env.OPENROUTER_API_KEY = "sk-openrouter";
+      process.env.MISTRAL_API_KEY = "sk-mistral";
       mockDownloadedFile("dummy-image-data");
 
       const invalidSchemaJson = JSON.stringify({
@@ -582,8 +608,8 @@ describe("ai.service.ts - processReceiptWithAI (Multi-Provider Fallback)", () =>
       const callOrder: string[] = [];
 
       fetchMock.mockImplementation(async (url: string) => {
-        if (url === "https://api.mistral.ai/v1/chat/completions") {
-          callOrder.push("mistral");
+        if (url === "https://openrouter.ai/api/v1/chat/completions") {
+          callOrder.push("openrouter");
           return createFetchResponse({
             ok: true,
             status: 200,
@@ -592,8 +618,8 @@ describe("ai.service.ts - processReceiptWithAI (Multi-Provider Fallback)", () =>
             },
           });
         }
-        if (url === "https://openrouter.ai/api/v1/chat/completions") {
-          callOrder.push("openrouter");
+        if (url === "https://api.mistral.ai/v1/chat/completions") {
+          callOrder.push("mistral");
           return createFetchResponse({
             ok: true,
             status: 200,
@@ -610,7 +636,7 @@ describe("ai.service.ts - processReceiptWithAI (Multi-Provider Fallback)", () =>
         "image/jpeg",
       );
 
-      expect(callOrder).toEqual(["mistral", "openrouter"]);
+      expect(callOrder).toEqual(["openrouter", "mistral"]);
       expect(result).toEqual({
         ...sampleReceiptPayload,
         raw_ai_response: validJson,
@@ -630,32 +656,37 @@ describe("ai.service.ts - processReceiptWithAI (Multi-Provider Fallback)", () =>
       expect(GoogleGenAI).not.toHaveBeenCalled();
     });
 
-    it("throws a consolidated error listing all provider failure reasons when all configured providers fail", async () => {
-      process.env.MISTRAL_API_KEY = "sk-mistral";
+    it("throws a consolidated error listing all provider failure reasons in priority order when all configured providers fail", async () => {
       process.env.OPENROUTER_API_KEY = "sk-openrouter";
       process.env.GEMINI_API_KEY = "sk-gemini";
+      process.env.MISTRAL_API_KEY = "sk-mistral";
       mockDownloadedFile("dummy-image-data");
 
+      const callOrder: string[] = [];
+
       fetchMock.mockImplementation(async (url: string) => {
-        if (url === "https://api.mistral.ai/v1/chat/completions") {
-          return createFetchResponse({
-            ok: false,
-            status: 429,
-            textData: "Rate limit exceeded",
-          });
-        }
         if (url === "https://openrouter.ai/api/v1/chat/completions") {
+          callOrder.push("openrouter");
           return createFetchResponse({
             ok: false,
             status: 500,
             textData: "Internal server error",
           });
         }
+        if (url === "https://api.mistral.ai/v1/chat/completions") {
+          callOrder.push("mistral");
+          return createFetchResponse({
+            ok: false,
+            status: 429,
+            textData: "Rate limit exceeded",
+          });
+        }
         throw new Error(`Unexpected fetch URL: ${url}`);
       });
 
-      mockInteractions.create.mockResolvedValue({
-        output_text: null,
+      mockInteractions.create.mockImplementation(async () => {
+        callOrder.push("gemini");
+        return { output_text: null };
       });
 
       let caughtError: unknown;
@@ -665,14 +696,21 @@ describe("ai.service.ts - processReceiptWithAI (Multi-Provider Fallback)", () =>
         caughtError = err;
       }
 
+      expect(callOrder).toEqual(["openrouter", "gemini", "mistral"]);
       expect(caughtError).toBeInstanceOf(Error);
       const message = (caughtError as Error).message;
-      expect(message).toMatch(/mistral/i);
-      expect(message).toMatch(/429|rate limit/i);
       expect(message).toMatch(/openrouter/i);
       expect(message).toMatch(/500|internal/i);
       expect(message).toMatch(/gemini/i);
       expect(message).toMatch(/não retornou nenhum texto/i);
+      expect(message).toMatch(/mistral/i);
+      expect(message).toMatch(/429|rate limit/i);
+      expect(message.indexOf("[openrouter]")).toBeLessThan(
+        message.indexOf("[gemini]"),
+      );
+      expect(message.indexOf("[gemini]")).toBeLessThan(
+        message.indexOf("[mistral]"),
+      );
     });
   });
 });
