@@ -1,5 +1,13 @@
 import { GoogleGenAI } from "@google/genai";
-import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mock,
+  vi,
+} from "vitest";
 import { createClient } from "@/lib/supabase/server";
 import { processReceiptWithAI } from "./ai.service";
 
@@ -12,14 +20,64 @@ vi.mock("@google/genai", () => ({
   GoogleGenAI: vi.fn(),
 }));
 
-describe("ai.service.ts - processReceiptWithAI", () => {
+function createFetchResponse(options: {
+  ok: boolean;
+  status: number;
+  jsonData?: unknown;
+  textData?: string;
+}): Response {
+  return {
+    ok: options.ok,
+    status: options.status,
+    statusText: options.ok ? "OK" : "Error",
+    json: vi.fn().mockResolvedValue(options.jsonData ?? {}),
+    text: vi
+      .fn()
+      .mockResolvedValue(
+        options.textData ?? JSON.stringify(options.jsonData ?? {}),
+      ),
+  } as unknown as Response;
+}
+
+describe("ai.service.ts - processReceiptWithAI (Multi-Provider Fallback)", () => {
+  const originalEnv = process.env;
+  const originalFetch = global.fetch;
+
   let mockStorage: { from: Mock; download: Mock };
   let mockSupabase: { storage: { from: Mock; download: Mock } };
   let mockInteractions: { create: Mock };
   let mockGoogleGenAI: { interactions: { create: Mock } };
+  let fetchMock: Mock;
+
+  const sampleReceiptPayload = {
+    issuer_name: "Supermarket",
+    issuer_cnpj: "12.345.678/0001-90",
+    receiver_cnpj: "09.876.543/0001-12",
+    total_value: 150.5,
+    issue_date: "2026-03-16",
+    issue_number: "12345",
+    description: "Groceries",
+  };
+
+  function mockDownloadedFile(content = "dummy-receipt-data") {
+    const mockFileBuffer = new TextEncoder().encode(content).buffer;
+    mockStorage.download.mockResolvedValue({
+      data: { arrayBuffer: vi.fn().mockResolvedValue(mockFileBuffer) },
+      error: null,
+    });
+    return mockFileBuffer;
+  }
 
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env = { ...originalEnv };
+    delete process.env.MISTRAL_API_KEY;
+    delete process.env.MISTRAL_MODEL;
+    delete process.env.OPENROUTER_API_KEY;
+    delete process.env.OPENROUTER_MODEL;
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.GOOGLE_API_KEY;
+    delete process.env.AI_PROVIDER_ORDER;
 
     mockStorage = {
       from: vi.fn().mockReturnThis(),
@@ -46,242 +104,575 @@ describe("ai.service.ts - processReceiptWithAI", () => {
     vi.mocked(GoogleGenAI).mockImplementation(function () {
       return mockGoogleGenAI as unknown as GoogleGenAI;
     });
+
+    fetchMock = vi.fn();
+    global.fetch = fetchMock;
   });
 
-  const expectedPrompt =
-    "Extraia os dados da nota fiscal em anexo. Se um dado não existir, retorne null. Converta valores monetários para número real (padrão americano) e datas para o formato ISO YYYY-MM-DD.";
+  afterEach(() => {
+    process.env = originalEnv;
+    global.fetch = originalFetch;
+  });
 
-  const expectedResponseFormat = {
-    type: "text",
-    mime_type: "application/json",
-    schema: {
-      type: "object",
-      properties: {
-        issuer_name: { type: "string" },
-        issuer_cnpj: { type: "string" },
-        receiver_cnpj: { type: "string" },
-        total_value: { type: "number" },
-        issue_date: { type: "string" },
-        issue_number: { type: "string" },
-        description: { type: "string" },
-      },
-      required: [
-        "issuer_name",
-        "issuer_cnpj",
-        "receiver_cnpj",
-        "total_value",
+  describe("Supabase Storage download errors", () => {
+    it("should throw 'Falha ao baixar o arquivo do Supabase' if download fails (e.g. RLS) without calling any AI provider", async () => {
+      process.env.MISTRAL_API_KEY = "sk-mistral";
+      process.env.OPENROUTER_API_KEY = "sk-openrouter";
+      process.env.GEMINI_API_KEY = "sk-gemini";
+
+      mockStorage.download.mockResolvedValue({
+        data: null,
+        error: new Error("RLS Error"),
+      });
+
+      await expect(
+        processReceiptWithAI("receipts/123.jpg", "image/jpeg"),
+      ).rejects.toThrow("Falha ao baixar o arquivo do Supabase");
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(GoogleGenAI).not.toHaveBeenCalled();
+    });
+
+    it("should throw 'Falha ao baixar o arquivo do Supabase' if downloaded fileData is null even without error without calling any AI provider", async () => {
+      process.env.MISTRAL_API_KEY = "sk-mistral";
+      mockStorage.download.mockResolvedValue({
+        data: null,
+        error: null,
+      });
+
+      await expect(
+        processReceiptWithAI("receipts/123.jpg", "image/jpeg"),
+      ).rejects.toThrow("Falha ao baixar o arquivo do Supabase");
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(GoogleGenAI).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Contract preservation and normalization", () => {
+    it("returns the 7 ReceiptAIExtractionSchema fields + raw_ai_response and normalizes issue_date from DD/MM/YYYY to YYYY-MM-DD", async () => {
+      process.env.MISTRAL_API_KEY = "sk-mistral";
+      mockDownloadedFile("dummy-image-data");
+
+      const rawResponse = JSON.stringify({
+        ...sampleReceiptPayload,
+        issue_date: "16/03/2026",
+      });
+
+      fetchMock.mockResolvedValueOnce(
+        createFetchResponse({
+          ok: true,
+          status: 200,
+          jsonData: {
+            choices: [{ message: { content: rawResponse } }],
+          },
+        }),
+      );
+
+      const result = await processReceiptWithAI(
+        "receipts/123.jpg",
+        "image/jpeg",
+      );
+
+      expect(result).toEqual({
+        ...sampleReceiptPayload,
+        issue_date: "2026-03-16",
+        raw_ai_response: rawResponse,
+      });
+      expect(Object.keys(result).sort()).toEqual([
+        "description",
         "issue_date",
         "issue_number",
-        "description",
-      ],
-    },
-  };
-
-  it("should process image receipt successfully (happy path)", async () => {
-    const mockFileBuffer = new TextEncoder().encode("dummy-image-data").buffer;
-    mockStorage.download.mockResolvedValue({
-      data: { arrayBuffer: vi.fn().mockResolvedValue(mockFileBuffer) },
-      error: null,
+        "issuer_cnpj",
+        "issuer_name",
+        "raw_ai_response",
+        "receiver_cnpj",
+        "total_value",
+      ]);
     });
 
-    const mockAiResponse = {
-      issuer_name: "Supermarket",
-      issuer_cnpj: "12.345.678/0001-90",
-      receiver_cnpj: "09.876.543/0001-12",
-      total_value: 150.5,
-      issue_date: "2023-10-01",
-      issue_number: "12345",
-      description: "Groceries",
-    };
+    it("processes PDF receipts via Mistral OCR + Chat Completions when Mistral is configured", async () => {
+      process.env.MISTRAL_API_KEY = "sk-mistral";
+      process.env.OPENROUTER_API_KEY = "sk-openrouter";
+      process.env.GEMINI_API_KEY = "sk-gemini";
+      mockDownloadedFile("dummy-pdf-data");
 
-    mockInteractions.create.mockResolvedValue({
-      output_text: JSON.stringify(mockAiResponse),
+      const rawResponse = JSON.stringify(sampleReceiptPayload);
+
+      fetchMock.mockImplementation(async (url: string) => {
+        if (url === "https://api.mistral.ai/v1/ocr") {
+          return createFetchResponse({
+            ok: true,
+            status: 200,
+            jsonData: {
+              pages: [
+                { index: 0, markdown: "Nota Fiscal Supermarket R$ 150,50" },
+              ],
+            },
+          });
+        }
+        if (url === "https://api.mistral.ai/v1/chat/completions") {
+          return createFetchResponse({
+            ok: true,
+            status: 200,
+            jsonData: {
+              choices: [{ message: { content: rawResponse } }],
+            },
+          });
+        }
+        throw new Error(`Unexpected fetch URL: ${url}`);
+      });
+
+      const result = await processReceiptWithAI(
+        "receipts/123.pdf",
+        "application/pdf",
+      );
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls[0]?.[0]).toBe(
+        "https://api.mistral.ai/v1/ocr",
+      );
+      expect(fetchMock.mock.calls[1]?.[0]).toBe(
+        "https://api.mistral.ai/v1/chat/completions",
+      );
+      expect(GoogleGenAI).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        ...sampleReceiptPayload,
+        raw_ai_response: rawResponse,
+      });
     });
+  });
 
-    const result = await processReceiptWithAI("receipts/123.jpg", "image/jpeg");
+  describe("Default priority order (mistral -> openrouter -> gemini)", () => {
+    it("uses Mistral and does NOT call OpenRouter or Gemini when MISTRAL_API_KEY is configured and succeeds", async () => {
+      process.env.MISTRAL_API_KEY = "sk-mistral";
+      process.env.OPENROUTER_API_KEY = "sk-openrouter";
+      process.env.GEMINI_API_KEY = "sk-gemini";
+      mockDownloadedFile("dummy-image-data");
 
-    expect(createClient).toHaveBeenCalled();
-    expect(mockStorage.from).toHaveBeenCalledWith("receipts");
-    expect(mockStorage.download).toHaveBeenCalledWith("receipts/123.jpg");
+      const rawResponse = JSON.stringify(sampleReceiptPayload);
 
-    expect(GoogleGenAI).toHaveBeenCalledWith({ apiVersion: "v1beta" });
-
-    const expectedBase64 = Buffer.from(mockFileBuffer).toString("base64");
-
-    expect(mockInteractions.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        model: "gemini-3.8-flash",
-        input: [
-          {
-            type: "text",
-            text: expectedPrompt,
+      fetchMock.mockResolvedValueOnce(
+        createFetchResponse({
+          ok: true,
+          status: 200,
+          jsonData: {
+            choices: [{ message: { content: rawResponse } }],
           },
-          {
-            type: "image",
-            data: expectedBase64,
-            mime_type: "image/jpeg",
+        }),
+      );
+
+      const result = await processReceiptWithAI(
+        "receipts/123.jpg",
+        "image/jpeg",
+      );
+
+      expect(createClient).toHaveBeenCalled();
+      expect(mockStorage.from).toHaveBeenCalledWith("receipts");
+      expect(mockStorage.download).toHaveBeenCalledWith("receipts/123.jpg");
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0]?.[0]).toBe(
+        "https://api.mistral.ai/v1/chat/completions",
+      );
+      expect(GoogleGenAI).not.toHaveBeenCalled();
+
+      expect(result).toEqual({
+        ...sampleReceiptPayload,
+        raw_ai_response: rawResponse,
+      });
+    });
+
+    it("falls back automatically to OpenRouter when Mistral fails with 429 Rate Limit", async () => {
+      process.env.MISTRAL_API_KEY = "sk-mistral";
+      process.env.OPENROUTER_API_KEY = "sk-openrouter";
+      process.env.GEMINI_API_KEY = "sk-gemini";
+      mockDownloadedFile("dummy-image-data");
+
+      const openRouterJson = JSON.stringify({
+        ...sampleReceiptPayload,
+        issuer_name: "Loja OpenRouter",
+        issue_date: "20/03/2026",
+      });
+      const callOrder: string[] = [];
+
+      fetchMock.mockImplementation(async (url: string) => {
+        if (url === "https://api.mistral.ai/v1/chat/completions") {
+          callOrder.push("mistral");
+          return createFetchResponse({
+            ok: false,
+            status: 429,
+            textData: "Rate limit exceeded",
+          });
+        }
+        if (url === "https://openrouter.ai/api/v1/chat/completions") {
+          callOrder.push("openrouter");
+          return createFetchResponse({
+            ok: true,
+            status: 200,
+            jsonData: {
+              choices: [
+                {
+                  message: { content: `\`\`\`json\n${openRouterJson}\n\`\`\`` },
+                },
+              ],
+            },
+          });
+        }
+        throw new Error(`Unexpected fetch URL: ${url}`);
+      });
+
+      const result = await processReceiptWithAI(
+        "receipts/123.jpg",
+        "image/jpeg",
+      );
+
+      expect(callOrder).toEqual(["mistral", "openrouter"]);
+      expect(GoogleGenAI).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        ...sampleReceiptPayload,
+        issuer_name: "Loja OpenRouter",
+        issue_date: "2026-03-20",
+        raw_ai_response: openRouterJson,
+      });
+    });
+
+    it("falls back automatically to Gemini when both Mistral and OpenRouter fail", async () => {
+      process.env.MISTRAL_API_KEY = "sk-mistral";
+      process.env.OPENROUTER_API_KEY = "sk-openrouter";
+      process.env.GEMINI_API_KEY = "sk-gemini";
+      mockDownloadedFile("dummy-image-data");
+
+      const callOrder: string[] = [];
+
+      fetchMock.mockImplementation(async (url: string) => {
+        if (url === "https://api.mistral.ai/v1/chat/completions") {
+          callOrder.push("mistral");
+          return createFetchResponse({
+            ok: false,
+            status: 429,
+            textData: "Rate limit exceeded",
+          });
+        }
+        if (url === "https://openrouter.ai/api/v1/chat/completions") {
+          callOrder.push("openrouter");
+          return createFetchResponse({
+            ok: false,
+            status: 500,
+            textData: "Upstream error",
+          });
+        }
+        throw new Error(`Unexpected fetch URL: ${url}`);
+      });
+
+      const geminiJson = JSON.stringify({
+        ...sampleReceiptPayload,
+        issuer_name: "Loja Gemini",
+      });
+      mockInteractions.create.mockImplementation(async () => {
+        callOrder.push("gemini");
+        return { output_text: geminiJson };
+      });
+
+      const result = await processReceiptWithAI(
+        "receipts/123.jpg",
+        "image/jpeg",
+      );
+
+      expect(callOrder).toEqual(["mistral", "openrouter", "gemini"]);
+      expect(result).toEqual({
+        ...sampleReceiptPayload,
+        issuer_name: "Loja Gemini",
+        raw_ai_response: geminiJson,
+      });
+    });
+
+    it("skips unconfigured Mistral and OpenRouter and uses Gemini directly when only GEMINI_API_KEY is configured", async () => {
+      process.env.GEMINI_API_KEY = "sk-gemini";
+      mockDownloadedFile("dummy-pdf-data");
+
+      const geminiJson = JSON.stringify(sampleReceiptPayload);
+      mockInteractions.create.mockResolvedValue({
+        output_text: geminiJson,
+      });
+
+      const result = await processReceiptWithAI(
+        "receipts/123.pdf",
+        "application/pdf",
+      );
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(GoogleGenAI).toHaveBeenCalledWith({ apiVersion: "v1beta" });
+      expect(result).toEqual({
+        ...sampleReceiptPayload,
+        raw_ai_response: geminiJson,
+      });
+    });
+
+    it("skips unconfigured Mistral and uses OpenRouter when only OPENROUTER_API_KEY and GEMINI_API_KEY are configured", async () => {
+      process.env.OPENROUTER_API_KEY = "sk-openrouter";
+      process.env.GEMINI_API_KEY = "sk-gemini";
+      mockDownloadedFile("dummy-image-data");
+
+      const openRouterJson = JSON.stringify(sampleReceiptPayload);
+      fetchMock.mockResolvedValueOnce(
+        createFetchResponse({
+          ok: true,
+          status: 200,
+          jsonData: {
+            choices: [{ message: { content: openRouterJson } }],
           },
-        ],
-        response_format: expectedResponseFormat,
-      }),
-    );
+        }),
+      );
 
-    expect(result).toEqual({
-      ...mockAiResponse,
-      raw_ai_response: JSON.stringify(mockAiResponse),
+      const result = await processReceiptWithAI(
+        "receipts/123.jpg",
+        "image/jpeg",
+      );
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0]?.[0]).toBe(
+        "https://openrouter.ai/api/v1/chat/completions",
+      );
+      expect(GoogleGenAI).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        ...sampleReceiptPayload,
+        raw_ai_response: openRouterJson,
+      });
     });
   });
 
-  it("should throw an error if Supabase download fails (e.g. RLS)", async () => {
-    mockStorage.download.mockResolvedValue({
-      data: null,
-      error: new Error("RLS Error"),
-    });
+  describe("Custom provider priority order (AI_PROVIDER_ORDER)", () => {
+    it("respects AI_PROVIDER_ORDER='openrouter,mistral,gemini' and calls OpenRouter first", async () => {
+      process.env.MISTRAL_API_KEY = "sk-mistral";
+      process.env.OPENROUTER_API_KEY = "sk-openrouter";
+      process.env.GEMINI_API_KEY = "sk-gemini";
+      process.env.AI_PROVIDER_ORDER = "openrouter,mistral,gemini";
+      mockDownloadedFile("dummy-image-data");
 
-    await expect(
-      processReceiptWithAI("receipts/123.jpg", "image/jpeg"),
-    ).rejects.toThrow("Falha ao baixar o arquivo do Supabase");
+      const openRouterJson = JSON.stringify({
+        ...sampleReceiptPayload,
+        issuer_name: "Primeiro OpenRouter",
+      });
 
-    expect(GoogleGenAI).not.toHaveBeenCalled();
-  });
-
-  it("should throw an error if downloaded fileData is null even without error", async () => {
-    mockStorage.download.mockResolvedValue({
-      data: null,
-      error: null,
-    });
-
-    await expect(
-      processReceiptWithAI("receipts/123.jpg", "image/jpeg"),
-    ).rejects.toThrow("Falha ao baixar o arquivo do Supabase");
-
-    expect(GoogleGenAI).not.toHaveBeenCalled();
-  });
-
-  it("should throw an error if Gemini returns no text", async () => {
-    const mockFileBuffer = new TextEncoder().encode("dummy-image-data").buffer;
-    mockStorage.download.mockResolvedValue({
-      data: { arrayBuffer: vi.fn().mockResolvedValue(mockFileBuffer) },
-      error: null,
-    });
-
-    mockInteractions.create.mockResolvedValue({
-      output_text: null, // Gemini returned no text
-    });
-
-    await expect(
-      processReceiptWithAI("receipts/123.jpg", "image/jpeg"),
-    ).rejects.toThrow("A IA não retornou nenhum texto.");
-  });
-
-  it("should format document type correctly if mime type is PDF", async () => {
-    const mockFileBuffer = new TextEncoder().encode("dummy-pdf-data").buffer;
-    mockStorage.download.mockResolvedValue({
-      data: { arrayBuffer: vi.fn().mockResolvedValue(mockFileBuffer) },
-      error: null,
-    });
-
-    const mockAiResponse = {
-      issuer_name: null,
-      issuer_cnpj: null,
-      receiver_cnpj: null,
-      total_value: null,
-      issue_date: null,
-      issue_number: null,
-      description: null,
-    };
-
-    mockInteractions.create.mockResolvedValue({
-      output_text: JSON.stringify(mockAiResponse),
-    });
-
-    await processReceiptWithAI("receipts/123.pdf", "application/pdf");
-
-    expect(GoogleGenAI).toHaveBeenCalledWith({ apiVersion: "v1beta" });
-
-    const expectedBase64 = Buffer.from(mockFileBuffer).toString("base64");
-
-    expect(mockInteractions.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        input: [
-          {
-            type: "text",
-            text: expectedPrompt,
+      fetchMock.mockResolvedValueOnce(
+        createFetchResponse({
+          ok: true,
+          status: 200,
+          jsonData: {
+            choices: [{ message: { content: openRouterJson } }],
           },
-          {
-            type: "document",
-            data: expectedBase64,
-            mime_type: "application/pdf",
-          },
-        ],
-      }),
-    );
+        }),
+      );
+
+      const result = await processReceiptWithAI(
+        "receipts/123.jpg",
+        "image/jpeg",
+      );
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0]?.[0]).toBe(
+        "https://openrouter.ai/api/v1/chat/completions",
+      );
+      expect(GoogleGenAI).not.toHaveBeenCalled();
+      expect(result.issuer_name).toBe("Primeiro OpenRouter");
+    });
+
+    it("falls back according to custom AI_PROVIDER_ORDER='openrouter,mistral,gemini' (OpenRouter fails -> Mistral)", async () => {
+      process.env.MISTRAL_API_KEY = "sk-mistral";
+      process.env.OPENROUTER_API_KEY = "sk-openrouter";
+      process.env.GEMINI_API_KEY = "sk-gemini";
+      process.env.AI_PROVIDER_ORDER = "openrouter,mistral,gemini";
+      mockDownloadedFile("dummy-image-data");
+
+      const callOrder: string[] = [];
+      const mistralJson = JSON.stringify({
+        ...sampleReceiptPayload,
+        issuer_name: "Segundo Mistral",
+      });
+
+      fetchMock.mockImplementation(async (url: string) => {
+        if (url === "https://openrouter.ai/api/v1/chat/completions") {
+          callOrder.push("openrouter");
+          return createFetchResponse({
+            ok: false,
+            status: 503,
+            textData: "Service Unavailable",
+          });
+        }
+        if (url === "https://api.mistral.ai/v1/chat/completions") {
+          callOrder.push("mistral");
+          return createFetchResponse({
+            ok: true,
+            status: 200,
+            jsonData: {
+              choices: [{ message: { content: mistralJson } }],
+            },
+          });
+        }
+        throw new Error(`Unexpected fetch URL: ${url}`);
+      });
+
+      const result = await processReceiptWithAI(
+        "receipts/123.jpg",
+        "image/jpeg",
+      );
+
+      expect(callOrder).toEqual(["openrouter", "mistral"]);
+      expect(GoogleGenAI).not.toHaveBeenCalled();
+      expect(result.issuer_name).toBe("Segundo Mistral");
+    });
   });
 
-  it("should throw a validation error if the AI returns invalid JSON structure", async () => {
-    const mockFileBuffer = new TextEncoder().encode("dummy-image-data").buffer;
-    mockStorage.download.mockResolvedValue({
-      data: { arrayBuffer: vi.fn().mockResolvedValue(mockFileBuffer) },
-      error: null,
+  describe("Fallback on invalid JSON or Zod validation failure", () => {
+    it("falls back to the next configured provider when a provider returns malformed JSON", async () => {
+      process.env.MISTRAL_API_KEY = "sk-mistral";
+      process.env.OPENROUTER_API_KEY = "sk-openrouter";
+      mockDownloadedFile("dummy-image-data");
+
+      const validJson = JSON.stringify(sampleReceiptPayload);
+      const callOrder: string[] = [];
+
+      fetchMock.mockImplementation(async (url: string) => {
+        if (url === "https://api.mistral.ai/v1/chat/completions") {
+          callOrder.push("mistral");
+          return createFetchResponse({
+            ok: true,
+            status: 200,
+            jsonData: {
+              choices: [{ message: { content: "NOT JSON" } }],
+            },
+          });
+        }
+        if (url === "https://openrouter.ai/api/v1/chat/completions") {
+          callOrder.push("openrouter");
+          return createFetchResponse({
+            ok: true,
+            status: 200,
+            jsonData: {
+              choices: [{ message: { content: validJson } }],
+            },
+          });
+        }
+        throw new Error(`Unexpected fetch URL: ${url}`);
+      });
+
+      const result = await processReceiptWithAI(
+        "receipts/123.jpg",
+        "image/jpeg",
+      );
+
+      expect(callOrder).toEqual(["mistral", "openrouter"]);
+      expect(result).toEqual({
+        ...sampleReceiptPayload,
+        raw_ai_response: validJson,
+      });
     });
 
-    const invalidAiResponse = {
-      // missing fields
-      total_value: "150.5", // string instead of number
-    };
+    it("falls back to the next configured provider when a provider returns JSON that fails ReceiptAIExtractionSchema validation", async () => {
+      process.env.MISTRAL_API_KEY = "sk-mistral";
+      process.env.OPENROUTER_API_KEY = "sk-openrouter";
+      mockDownloadedFile("dummy-image-data");
 
-    mockInteractions.create.mockResolvedValue({
-      output_text: JSON.stringify(invalidAiResponse),
+      const invalidSchemaJson = JSON.stringify({
+        // missing required nullable keys & wrong type for total_value
+        total_value: "150.5",
+      });
+      const validJson = JSON.stringify(sampleReceiptPayload);
+      const callOrder: string[] = [];
+
+      fetchMock.mockImplementation(async (url: string) => {
+        if (url === "https://api.mistral.ai/v1/chat/completions") {
+          callOrder.push("mistral");
+          return createFetchResponse({
+            ok: true,
+            status: 200,
+            jsonData: {
+              choices: [{ message: { content: invalidSchemaJson } }],
+            },
+          });
+        }
+        if (url === "https://openrouter.ai/api/v1/chat/completions") {
+          callOrder.push("openrouter");
+          return createFetchResponse({
+            ok: true,
+            status: 200,
+            jsonData: {
+              choices: [{ message: { content: validJson } }],
+            },
+          });
+        }
+        throw new Error(`Unexpected fetch URL: ${url}`);
+      });
+
+      const result = await processReceiptWithAI(
+        "receipts/123.jpg",
+        "image/jpeg",
+      );
+
+      expect(callOrder).toEqual(["mistral", "openrouter"]);
+      expect(result).toEqual({
+        ...sampleReceiptPayload,
+        raw_ai_response: validJson,
+      });
     });
-
-    // We can't import ZodError directly without importing Zod, so let's check it doesn't throw 'Not implemented'
-    // but throws something else, or just check the constructor name if possible.
-    // Actually we can import ZodError from 'zod'.
-    const { ZodError } = await import("zod");
-    await expect(
-      processReceiptWithAI("receipts/123.jpg", "image/jpeg"),
-    ).rejects.toThrow(ZodError);
   });
 
-  it("should throw an error if the AI returns malformed JSON", async () => {
-    const mockFileBuffer = new TextEncoder().encode("dummy-image-data").buffer;
-    mockStorage.download.mockResolvedValue({
-      data: { arrayBuffer: vi.fn().mockResolvedValue(mockFileBuffer) },
-      error: null,
+  describe("Exhaustion and unconfigured provider errors", () => {
+    it("throws a descriptive error without calling any provider when no AI provider has an API key configured", async () => {
+      mockDownloadedFile("dummy-image-data");
+
+      await expect(
+        processReceiptWithAI("receipts/123.jpg", "image/jpeg"),
+      ).rejects.toThrow(/configurado|provider|provedor|api key|chave/i);
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(GoogleGenAI).not.toHaveBeenCalled();
     });
 
-    mockInteractions.create.mockResolvedValue({
-      output_text: "NOT JSON",
+    it("throws a consolidated error listing all provider failure reasons when all configured providers fail", async () => {
+      process.env.MISTRAL_API_KEY = "sk-mistral";
+      process.env.OPENROUTER_API_KEY = "sk-openrouter";
+      process.env.GEMINI_API_KEY = "sk-gemini";
+      mockDownloadedFile("dummy-image-data");
+
+      fetchMock.mockImplementation(async (url: string) => {
+        if (url === "https://api.mistral.ai/v1/chat/completions") {
+          return createFetchResponse({
+            ok: false,
+            status: 429,
+            textData: "Rate limit exceeded",
+          });
+        }
+        if (url === "https://openrouter.ai/api/v1/chat/completions") {
+          return createFetchResponse({
+            ok: false,
+            status: 500,
+            textData: "Internal server error",
+          });
+        }
+        throw new Error(`Unexpected fetch URL: ${url}`);
+      });
+
+      mockInteractions.create.mockResolvedValue({
+        output_text: null,
+      });
+
+      let caughtError: unknown;
+      try {
+        await processReceiptWithAI("receipts/123.jpg", "image/jpeg");
+      } catch (err) {
+        caughtError = err;
+      }
+
+      expect(caughtError).toBeInstanceOf(Error);
+      const message = (caughtError as Error).message;
+      expect(message).toMatch(/mistral/i);
+      expect(message).toMatch(/429|rate limit/i);
+      expect(message).toMatch(/openrouter/i);
+      expect(message).toMatch(/500|internal/i);
+      expect(message).toMatch(/gemini/i);
+      expect(message).toMatch(/não retornou nenhum texto/i);
     });
-
-    await expect(
-      processReceiptWithAI("receipts/123.jpg", "image/jpeg"),
-    ).rejects.toThrow(SyntaxError);
-  });
-
-  it("should normalize issue_date from Brazilian format DD/MM/YYYY to ISO format YYYY-MM-DD", async () => {
-    const mockFileBuffer = new TextEncoder().encode("dummy-image-data").buffer;
-    mockStorage.download.mockResolvedValue({
-      data: { arrayBuffer: vi.fn().mockResolvedValue(mockFileBuffer) },
-      error: null,
-    });
-
-    const mockAiResponse = {
-      issuer_name: "Supermarket",
-      issuer_cnpj: "12.345.678/0001-90",
-      receiver_cnpj: "09.876.543/0001-12",
-      total_value: 150.5,
-      issue_date: "16/03/2026",
-      issue_number: "12345",
-      description: "Groceries",
-    };
-
-    mockInteractions.create.mockResolvedValue({
-      output_text: JSON.stringify(mockAiResponse),
-    });
-
-    const result = await processReceiptWithAI("receipts/123.jpg", "image/jpeg");
-
-    expect(result.issue_date).toBe("2026-03-16");
   });
 });
