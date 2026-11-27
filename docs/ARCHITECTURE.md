@@ -32,12 +32,16 @@ Plataforma "Backend as a Service" (BaaS) baseada em PostgreSQL.
 -   **Storage (Bucket):** Armazenará os arquivos brutos (PDFs e Imagens) das notas fiscais após o upload.
 -   **Auth:** Gerenciará as sessões e permissões de usuários.
 
-### 3. Motor de Inteligência Artificial: Google Gemini
+### 3. Motor de Inteligência Artificial: Multi-Provider (OpenRouter → Gemini → Mistral)
 
-Responsável pela lógica central de OCR (Optical Character Recognition) e extração inteligente.
+Responsável pela lógica central de OCR (Optical Character Recognition) e extração inteligente com fallback automático.
 
--   **Modelo Primário:** Gemini 3.8 Flash (`gemini-3.8-flash`) via Interactions API (`@google/genai`) — rápido e com suporte nativo a imagens/PDFs em Base64 e Structured Output.
--   **Integração:** O backend Next.js fará o proxy do arquivo para a API do Gemini, utilizando a funcionalidade "Structured Output" (forçando o retorno a ser um JSON perfeitamente formatado para o banco de dados).
+-   **Provedores Suportados:**
+    1. **Mistral AI (`mistral.provider.ts`)**: Suporta imagens via Chat Completions (`mistral-small-latest` ou custom `MISTRAL_MODEL`) e PDFs via Mistral OCR (`mistral-ocr-latest`) concatenando o markdown das páginas antes de extrair o JSON.
+    2. **OpenRouter (`openrouter.provider.ts`)**: Suporta imagens (`image_url`) e PDFs (`file`) via Chat Completions (`openrouter/free` ou custom `OPENROUTER_MODEL`), com limpeza automática de blocos markdown (` ```json ... ``` `).
+    3. **Google Gemini (`gemini.provider.ts`)**: Utiliza `gemini-3.8-flash` via `@google/genai` (Interactions API com `response_format` Zod/JSON schema).
+-   **Orquestração e Fallback (`ai.service.ts`)**: Baixa o arquivo do Supabase Storage uma única vez, monta a lista de provedores ativos na ordem definida por `AI_PROVIDER_ORDER` (default: `"openrouter,gemini,mistral"`), tenta a extração com fallback automático em caso de falha de rede, rate limit (429), erro de servidor (500), JSON inválido ou falha de validação Zod, e retorna os dados validados acrescidos de `raw_ai_response`.
+-   **Variáveis de Ambiente**: `MISTRAL_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY` (ou `GOOGLE_API_KEY`), `AI_PROVIDER_ORDER`, `MISTRAL_MODEL`, `OPENROUTER_MODEL`.
 
 ### 4. Serviço de Disparo de E-mails: Gmail API + React Email
 
