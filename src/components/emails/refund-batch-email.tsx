@@ -8,6 +8,7 @@ import {
   Text,
 } from "@react-email/components";
 import type { RefundRequest } from "@/models/refund.model";
+import { DEFAULT_EMAIL_SETTINGS } from "@/models/settings.model";
 
 export interface RefundBatchEmailProps {
   date: string;
@@ -20,6 +21,11 @@ export interface RefundBatchEmailProps {
   senderRole?: string;
   senderEmail?: string;
   senderPhone?: string;
+  greetingText?: string;
+  introTextTemplate?: string;
+  spreadsheetText?: string;
+  approvalRequestText?: string;
+  closingText?: string;
 }
 
 export function RefundBatchEmail({
@@ -33,6 +39,11 @@ export function RefundBatchEmail({
   senderRole,
   senderEmail,
   senderPhone,
+  greetingText,
+  introTextTemplate,
+  spreadsheetText,
+  approvalRequestText,
+  closingText,
 }: RefundBatchEmailProps) {
   const computedTotal =
     totalValue ??
@@ -43,7 +54,6 @@ export function RefundBatchEmail({
     currency: "BRL",
   });
 
-  // Group requests by requester_name keeping order of appearance
   const groups: Array<{ name: string; total: number; pix: string }> = [];
   for (const req of requests) {
     const name = req.requester_name;
@@ -57,16 +67,59 @@ export function RefundBatchEmail({
     }
   }
 
-  const rawDesc = eventDescription?.trim() || `gastos do lote de ${date}`;
-  const cleanDesc = rawDesc.replace(/^aos\s+/i, "");
+  const rawDesc =
+    eventDescription !== undefined
+      ? eventDescription
+      : DEFAULT_EMAIL_SETTINGS.default_event_description;
+  const finalDesc =
+    rawDesc && rawDesc.trim() !== "" ? rawDesc : `gastos do lote de ${date}`;
+  const cleanDesc = finalDesc.replace(/^aos\s+/i, "");
 
-  const resolvedApprover = approverEmail?.trim() || "jaque.hanaoka@gmail.com";
-  const resolvedSenderName = senderName?.trim() || "Lucas Tamanaha";
+  const resolvedGreeting =
+    greetingText !== undefined && greetingText.trim() !== ""
+      ? greetingText
+      : DEFAULT_EMAIL_SETTINGS.greeting_text;
+  const rawIntroTemplate =
+    introTextTemplate !== undefined && introTextTemplate.trim() !== ""
+      ? introTextTemplate
+      : DEFAULT_EMAIL_SETTINGS.intro_text_template;
+  const resolvedIntro = rawIntroTemplate.replaceAll(
+    "{eventDescription}",
+    cleanDesc,
+  );
+  const resolvedSpreadsheet =
+    spreadsheetText !== undefined && spreadsheetText.trim() !== ""
+      ? spreadsheetText
+      : DEFAULT_EMAIL_SETTINGS.spreadsheet_text;
+  const resolvedApprover =
+    approverEmail !== undefined && approverEmail.trim() !== ""
+      ? approverEmail
+      : DEFAULT_EMAIL_SETTINGS.approver_email;
+  const resolvedApprovalReq =
+    approvalRequestText !== undefined && approvalRequestText.trim() !== ""
+      ? approvalRequestText
+      : DEFAULT_EMAIL_SETTINGS.approval_request_text;
+  const resolvedClosing =
+    closingText !== undefined && closingText.trim() !== ""
+      ? closingText
+      : DEFAULT_EMAIL_SETTINGS.closing_text;
+
+  const resolvedSenderName =
+    senderName !== undefined && senderName.trim() !== ""
+      ? senderName
+      : DEFAULT_EMAIL_SETTINGS.sender_name;
   const resolvedSenderRole =
-    senderRole?.trim() ||
-    "Diretor Financeiro da Comissão de Jovens do Bunkyo - Gestão 2026";
-  const resolvedSenderEmail = senderEmail?.trim() || "jovens@bunkyo.org.br";
-  const resolvedSenderPhone = senderPhone?.trim() || "(16) 99332-8607";
+    senderRole !== undefined && senderRole.trim() !== ""
+      ? senderRole
+      : DEFAULT_EMAIL_SETTINGS.sender_role;
+  const resolvedSenderEmail =
+    senderEmail !== undefined && senderEmail.trim() !== ""
+      ? senderEmail
+      : DEFAULT_EMAIL_SETTINGS.sender_email;
+  const resolvedSenderPhone =
+    senderPhone !== undefined && senderPhone.trim() !== ""
+      ? senderPhone
+      : DEFAULT_EMAIL_SETTINGS.sender_phone;
 
   return (
     <Html>
@@ -85,84 +138,33 @@ export function RefundBatchEmail({
             borderRadius: "5px",
           }}
         >
-          <Text>Pessoal, bom dia.</Text>
-          <Text>
-            Gostaria de solicitar o reembolso referente aos {cleanDesc}.
-          </Text>
-          <Text>
-            A planilha compartilhada "Solicitação de Reembolso de Despesas" foi
-            preenchida com os valores e informações das notas que competem ao
-            evento.
-          </Text>
+          <Text>{resolvedGreeting}</Text>
+          <Text>{resolvedIntro}</Text>
+          <Text>{resolvedSpreadsheet}</Text>
 
-          <Section>
-            <table
-              style={{
-                borderCollapse: "collapse",
-                marginTop: "16px",
-                marginBottom: "4px",
-                width: "100%",
-              }}
-            >
+          <Section style={{ margin: "20px 0" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
-                <tr style={{ backgroundColor: "#d9d9d9" }}>
-                  <th
-                    style={{
-                      border: "1px solid #000000",
-                      padding: "8px",
-                      textAlign: "center",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    Pessoa
-                  </th>
-                  <th
-                    style={{
-                      border: "1px solid #000000",
-                      padding: "8px",
-                      textAlign: "center",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    PIX
-                  </th>
-                  <th
-                    style={{
-                      border: "1px solid #000000",
-                      padding: "8px",
-                      textAlign: "center",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    Valor
-                  </th>
+                <tr
+                  style={{
+                    borderBottom: "1px solid #e2e8f0",
+                    textAlign: "left",
+                  }}
+                >
+                  <th style={{ padding: "8px" }}>Pessoa</th>
+                  <th style={{ padding: "8px" }}>PIX</th>
+                  <th style={{ padding: "8px", textAlign: "right" }}>Valor</th>
                 </tr>
               </thead>
               <tbody>
                 {groups.map((group) => (
-                  <tr key={group.name}>
-                    <td
-                      style={{
-                        border: "1px solid #000000",
-                        padding: "8px",
-                      }}
-                    >
-                      {group.name}
-                    </td>
-                    <td
-                      style={{
-                        border: "1px solid #000000",
-                        padding: "8px",
-                      }}
-                    >
-                      {group.pix}
-                    </td>
-                    <td
-                      style={{
-                        border: "1px solid #000000",
-                        padding: "8px",
-                      }}
-                    >
+                  <tr
+                    key={group.name}
+                    style={{ borderBottom: "1px solid #edf2f7" }}
+                  >
+                    <td style={{ padding: "8px" }}>{group.name}</td>
+                    <td style={{ padding: "8px" }}>{group.pix}</td>
+                    <td style={{ padding: "8px", textAlign: "right" }}>
                       {currencyFormatter.format(group.total)}
                     </td>
                   </tr>
@@ -171,35 +173,28 @@ export function RefundBatchEmail({
             </table>
           </Section>
 
-          <Text style={{ fontWeight: "bold" }}>
+          <Text style={{ fontWeight: "bold", fontSize: "16px" }}>
             Valor total {currencyFormatter.format(computedTotal)}
           </Text>
 
-          <Text>
-            <Link
-              href={`mailto:${resolvedApprover}`}
-              style={{ color: "#1155cc" }}
-            >
-              @{resolvedApprover}
-            </Link>
-            <span>
-              . Por gentileza, poderia revisar e aprovar esta solicitação?
-            </span>
+          <Text style={{ marginTop: "20px" }}>
+            @{resolvedApprover} {resolvedApprovalReq}
           </Text>
 
-          <Text>Atenciosamente,</Text>
-          <Text style={{ color: "#cc0000", fontWeight: "bold", margin: "0" }}>
-            {resolvedSenderName}
+          <Text style={{ marginTop: "20px" }}>{resolvedClosing}</Text>
+          <Text>
+            <strong>{resolvedSenderName}</strong>
           </Text>
-          <Text style={{ fontWeight: "bold", margin: "0" }}>
-            {resolvedSenderRole}
+          <Text>{resolvedSenderRole}</Text>
+          <Text>
+            <Link
+              href={`mailto:${resolvedSenderEmail}`}
+              style={{ color: "#2563eb", textDecoration: "underline" }}
+            >
+              {resolvedSenderEmail}
+            </Link>
           </Text>
-          <Text style={{ color: "#cc0000", margin: "0" }}>
-            {resolvedSenderEmail}
-          </Text>
-          <Text style={{ color: "#cc0000", fontWeight: "bold", margin: "0" }}>
-            {resolvedSenderPhone}
-          </Text>
+          <Text>{resolvedSenderPhone}</Text>
         </Container>
       </Body>
     </Html>

@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { RefundRequest } from "@/models/refund.model";
+import type { EmailSettings } from "@/models/settings.model";
 import { BatchPaymentDialog } from "./batch-payment-dialog";
 
 const mockSelectedRequests: RefundRequest[] = [
@@ -264,6 +265,191 @@ describe("BatchPaymentDialog", () => {
           "Diretor Financeiro da Comissão de Jovens do Bunkyo - Gestão 2026",
         senderPhone: "(16) 99332-8607",
       }),
+    );
+  });
+
+  it("should pre-fill form fields from defaultSettings and pass custom template texts in metadata on confirm", async () => {
+    const onConfirm = vi.fn();
+    const mockDefaultSettings: EmailSettings = {
+      id: "settings-1",
+      recipient_email: "tesouraria@bunkyo.org.br",
+      cc_email: "presidente@bunkyo.org.br",
+      bcc_email: "arquivo@bunkyo.org.br",
+      subject_prefix: "Reembolso Eventos - ",
+      default_event_description: "gastos com o Haru Matsuri 2026",
+      greeting_text: "Olá pessoal da tesouraria,",
+      intro_text_template:
+        "Encaminho o pedido de reembolso referente aos {eventDescription}.",
+      spreadsheet_text: "A planilha do evento foi preenchida no Google Drive.",
+      approver_email: "aprovador.cjb@bunkyo.org.br",
+      approval_request_text: "Favor validar e aprovar este lote.",
+      closing_text: "Abraços,",
+      sender_name: "Kenji Takahashi",
+      sender_role: "Tesoureiro CJB - Gestão 2026",
+      sender_email: "kenji@bunkyo.org.br",
+      sender_phone: "(11) 99999-1234",
+      updated_at: "2026-11-26T10:00:00Z",
+    };
+
+    render(
+      <BatchPaymentDialog
+        isOpen={true}
+        onClose={() => {}}
+        selectedRequests={mockSelectedRequests}
+        defaultSettings={mockDefaultSettings}
+        onConfirm={onConfirm}
+      />,
+    );
+
+    expect(screen.getByLabelText(/E-mail do Financeiro/i)).toHaveValue(
+      "tesouraria@bunkyo.org.br",
+    );
+    expect(screen.getByLabelText(/Cc \(Cópia\)/i)).toHaveValue(
+      "presidente@bunkyo.org.br",
+    );
+    expect(screen.getByLabelText(/Cco \(Cópia Oculta\)/i)).toHaveValue(
+      "arquivo@bunkyo.org.br",
+    );
+    expect(screen.getByLabelText(/Assunto/i)).toHaveValue(
+      "Reembolso Eventos - ",
+    );
+    expect(screen.getByLabelText(/Descrição do Evento|Gastos/i)).toHaveValue(
+      "gastos com o Haru Matsuri 2026",
+    );
+    expect(screen.getByLabelText(/E-mail para Aprovação|Menção/i)).toHaveValue(
+      "aprovador.cjb@bunkyo.org.br",
+    );
+    expect(screen.getByLabelText(/Nome na Assinatura/i)).toHaveValue(
+      "Kenji Takahashi",
+    );
+    expect(screen.getByLabelText(/Cargo na Assinatura/i)).toHaveValue(
+      "Tesoureiro CJB - Gestão 2026",
+    );
+    expect(screen.getByLabelText(/Telefone na Assinatura/i)).toHaveValue(
+      "(11) 99999-1234",
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /confirmar envio/i }));
+    });
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onConfirm).toHaveBeenCalledWith(
+      mockSelectedRequests,
+      "tesouraria@bunkyo.org.br",
+      "presidente@bunkyo.org.br",
+      "arquivo@bunkyo.org.br",
+      expect.objectContaining({
+        subject: "Reembolso Eventos - ",
+        eventDescription: "gastos com o Haru Matsuri 2026",
+        approverEmail: "aprovador.cjb@bunkyo.org.br",
+        senderName: "Kenji Takahashi",
+        senderRole: "Tesoureiro CJB - Gestão 2026",
+        senderEmail: "kenji@bunkyo.org.br",
+        senderPhone: "(11) 99999-1234",
+        greetingText: "Olá pessoal da tesouraria,",
+        introTextTemplate:
+          "Encaminho o pedido de reembolso referente aos {eventDescription}.",
+        spreadsheetText: "A planilha do evento foi preenchida no Google Drive.",
+        approvalRequestText: "Favor validar e aprovar este lote.",
+        closingText: "Abraços,",
+      }),
+    );
+  });
+
+  it("should sync all input fields with updated defaultSettings when mounted closed (isOpen=false) and re-rendered with isOpen=true and new defaultSettings", () => {
+    const initialSettings: EmailSettings = {
+      id: "settings-initial",
+      recipient_email: "inicial@bunkyo.org.br",
+      cc_email: "cc-inicial@bunkyo.org.br",
+      bcc_email: "bcc-inicial@bunkyo.org.br",
+      subject_prefix: "Reembolso CJB - ",
+      default_event_description: "evento inicial",
+      greeting_text: "Pessoal, bom dia.",
+      intro_text_template:
+        "Gostaria de solicitar o reembolso referente aos {eventDescription}.",
+      spreadsheet_text: "Planilha inicial.",
+      approver_email: "jaque.hanaoka@gmail.com",
+      approval_request_text: "Por gentileza, revisar.",
+      closing_text: "Atenciosamente,",
+      sender_name: "Lucas Tamanaha",
+      sender_role:
+        "Diretor Financeiro da Comissão de Jovens do Bunkyo - Gestão 2026",
+      sender_email: "jovens@bunkyo.org.br",
+      sender_phone: "(16) 99332-8607",
+      updated_at: "2026-11-26T10:00:00Z",
+    };
+
+    const updatedSettings: EmailSettings = {
+      id: "settings-updated",
+      recipient_email: "novo-financeiro@bunkyo.org.br",
+      cc_email: "novo-cc@bunkyo.org.br",
+      bcc_email: "novo-bcc@bunkyo.org.br",
+      subject_prefix: "Reembolso Atualizado - ",
+      default_event_description: "gastos com o Undokai 2026",
+      greeting_text: "Bom dia equipe,",
+      intro_text_template: "Segue pedido referente aos {eventDescription}.",
+      spreadsheet_text: "Planilha atualizada.",
+      approver_email: "novo-aprovador@bunkyo.org.br",
+      approval_request_text: "Favor aprovar.",
+      closing_text: "Obrigado,",
+      sender_name: "Mariana Sato",
+      sender_role: "Diretora Financeira CJB - Gestão 2027",
+      sender_email: "mariana@bunkyo.org.br",
+      sender_phone: "(11) 98888-7777",
+      updated_at: "2026-11-27T14:00:00Z",
+    };
+
+    const { rerender } = render(
+      <BatchPaymentDialog
+        isOpen={false}
+        onClose={() => {}}
+        selectedRequests={mockSelectedRequests}
+        defaultSettings={initialSettings}
+      />,
+    );
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    rerender(
+      <BatchPaymentDialog
+        isOpen={true}
+        onClose={() => {}}
+        selectedRequests={mockSelectedRequests}
+        defaultSettings={updatedSettings}
+      />,
+    );
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByLabelText(/E-mail do Financeiro/i)).toHaveValue(
+      updatedSettings.recipient_email,
+    );
+    expect(screen.getByLabelText(/Cc \(Cópia\)/i)).toHaveValue(
+      updatedSettings.cc_email,
+    );
+    expect(screen.getByLabelText(/Cco \(Cópia Oculta\)/i)).toHaveValue(
+      updatedSettings.bcc_email,
+    );
+    expect(screen.getByLabelText(/Assunto/i)).toHaveValue(
+      updatedSettings.subject_prefix,
+    );
+    expect(screen.getByLabelText(/Descrição do Evento|Gastos/i)).toHaveValue(
+      updatedSettings.default_event_description,
+    );
+    expect(screen.getByLabelText(/E-mail para Aprovação|Menção/i)).toHaveValue(
+      updatedSettings.approver_email,
+    );
+    expect(screen.getByLabelText(/Nome na Assinatura/i)).toHaveValue(
+      updatedSettings.sender_name,
+    );
+    expect(screen.getByLabelText(/Cargo na Assinatura/i)).toHaveValue(
+      updatedSettings.sender_role,
+    );
+    expect(screen.getByLabelText(/E-mail na Assinatura/i)).toHaveValue(
+      updatedSettings.sender_email,
+    );
+    expect(screen.getByLabelText(/Telefone na Assinatura/i)).toHaveValue(
+      updatedSettings.sender_phone,
     );
   });
 });

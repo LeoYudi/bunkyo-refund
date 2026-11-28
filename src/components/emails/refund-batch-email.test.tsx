@@ -171,4 +171,79 @@ describe("RefundBatchEmail (CJB Template)", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("(11) 98888-7777")).toBeInTheDocument();
   });
+
+  it("should render custom template texts when greetingText, introTextTemplate, spreadsheetText, approvalRequestText, and closingText are provided", () => {
+    render(
+      <RefundBatchEmail
+        date="27/09/2026"
+        requests={mockCjbRequests}
+        eventDescription="aos gastos do Haru Matsuri 2026"
+        approverEmail="diretor@bunkyo.org.br"
+        greetingText="Olá equipe financeira,"
+        introTextTemplate="Solicito o reembolso referente aos {eventDescription} realizados."
+        spreadsheetText="Os comprovantes e a planilha atualizada seguem abaixo."
+        approvalRequestText="Poderia aprovar este pagamento?"
+        closingText="Cordialmente,"
+      />,
+    );
+
+    expect(screen.getByText("Olá equipe financeira,")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Solicito o reembolso referente aos gastos do Haru Matsuri 2026 realizados.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Os comprovantes e a planilha atualizada seguem abaixo.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/@diretor@bunkyo\.org\.br/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Poderia aprovar este pagamento\?/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Cordialmente,")).toBeInTheDocument();
+  });
+
+  it("should replace {eventDescription} in introTextTemplate with fallback batch date description when eventDescription is omitted", () => {
+    render(
+      <RefundBatchEmail
+        date="27/09/2026"
+        requests={mockCjbRequests}
+        introTextTemplate="Pedido referente a {eventDescription}."
+      />,
+    );
+
+    expect(
+      screen.getByText("Pedido referente a gastos do lote de 27/09/2026."),
+    ).toBeInTheDocument();
+  });
+
+  it("should fall back to official CJB defaults when custom template props are omitted", () => {
+    render(
+      <RefundBatchEmail
+        date="27/09/2026"
+        requests={mockCjbRequests}
+        eventDescription="gastos do DFI 2026"
+      />,
+    );
+
+    expect(screen.getByText("Pessoal, bom dia.")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Gostaria de solicitar o reembolso referente aos gastos do DFI 2026.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'A planilha compartilhada "Solicitação de Reembolso de Despesas" foi preenchida com os valores e informações das notas que competem ao evento.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Por gentileza, poderia revisar e aprovar esta solicitação\?/i,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Atenciosamente,")).toBeInTheDocument();
+  });
 });

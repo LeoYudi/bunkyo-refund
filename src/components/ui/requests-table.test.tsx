@@ -11,6 +11,7 @@ import {
 } from "@/actions/batch.actions";
 import * as refundActions from "@/actions/refund.actions";
 import type { Database } from "@/models/database.types";
+import type { EmailSettings } from "@/models/settings.model";
 import { RequestsTable } from "./requests-table";
 
 const mockPush = vi.fn();
@@ -1041,6 +1042,81 @@ describe("RequestsTable", () => {
       expect(mockPush).toHaveBeenCalledWith(
         "/login?reason=google_session_expired",
       );
+    });
+
+    it("should open BatchPaymentDialog pre-filled with all custom defaultEmailSettings fields when an APPROVED request is selected and 'Enviar Pagamentos em Lote' is clicked", () => {
+      const customSettings: EmailSettings = {
+        id: "settings-custom-1",
+        recipient_email: "tesouraria@bunkyo.org.br",
+        cc_email: "presidente@bunkyo.org.br",
+        bcc_email: "arquivo@bunkyo.org.br",
+        subject_prefix: "Reembolso Eventos - ",
+        default_event_description: "gastos com o Haru Matsuri 2026",
+        greeting_text: "Olá pessoal da tesouraria,",
+        intro_text_template:
+          "Encaminho o pedido de reembolso referente aos {eventDescription}.",
+        spreadsheet_text:
+          "A planilha do evento foi preenchida no Google Drive.",
+        approver_email: "aprovador.cjb@bunkyo.org.br",
+        approval_request_text: "Favor validar e aprovar este lote.",
+        closing_text: "Abraços,",
+        sender_name: "Kenji Takahashi",
+        sender_role: "Tesoureiro CJB - Gestão 2026",
+        sender_email: "kenji@bunkyo.org.br",
+        sender_phone: "(11) 99999-1234",
+        updated_at: "2026-11-26T10:00:00Z",
+      };
+
+      render(
+        <RequestsTable
+          requests={bulkMockRequests}
+          defaultEmailSettings={customSettings}
+        />,
+      );
+
+      const approvedCb = screen.getByRole("checkbox", {
+        name: /Bruno Aprovado/i,
+      });
+      fireEvent.click(approvedCb);
+
+      const batchPaymentButton = screen.getByRole("button", {
+        name: /enviar pagamentos em lote/i,
+      });
+      fireEvent.click(batchPaymentButton);
+
+      const dialog = screen.getByRole("dialog");
+      expect(dialog).toBeInTheDocument();
+
+      expect(
+        within(dialog).getByLabelText(/E-mail do Financeiro/i),
+      ).toHaveValue(customSettings.recipient_email);
+      expect(within(dialog).getByLabelText(/Cc \(Cópia\)/i)).toHaveValue(
+        customSettings.cc_email,
+      );
+      expect(
+        within(dialog).getByLabelText(/Cco \(Cópia Oculta\)/i),
+      ).toHaveValue(customSettings.bcc_email);
+      expect(within(dialog).getByLabelText(/Assunto/i)).toHaveValue(
+        customSettings.subject_prefix,
+      );
+      expect(within(dialog).getByLabelText(/Descrição do Evento/i)).toHaveValue(
+        customSettings.default_event_description,
+      );
+      expect(
+        within(dialog).getByLabelText(/E-mail para Aprovação/i),
+      ).toHaveValue(customSettings.approver_email);
+      expect(within(dialog).getByLabelText(/Nome na Assinatura/i)).toHaveValue(
+        customSettings.sender_name,
+      );
+      expect(within(dialog).getByLabelText(/Cargo na Assinatura/i)).toHaveValue(
+        customSettings.sender_role,
+      );
+      expect(
+        within(dialog).getByLabelText(/E-mail na Assinatura/i),
+      ).toHaveValue(customSettings.sender_email);
+      expect(
+        within(dialog).getByLabelText(/Telefone na Assinatura/i),
+      ).toHaveValue(customSettings.sender_phone);
     });
   });
 
