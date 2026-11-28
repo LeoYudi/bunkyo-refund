@@ -126,3 +126,55 @@ export async function deleteBatchRefundRequestsAction(
     return { success: false, error: errorMessage };
   }
 }
+
+export async function markRefundAsPaidAction(
+  id: string,
+): Promise<
+  { success: true; data: RefundRequest } | { success: false; error: string }
+> {
+  try {
+    const refundService = new RefundService();
+    const data = await refundService.markAsPaid(id);
+    revalidatePath("/admin");
+    return { success: true, data };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { success: false, error: errorMessage };
+  }
+}
+
+export async function markBatchRefundsAsPaidAction(
+  requestIds: string[],
+): Promise<{
+  success: boolean;
+  data?: {
+    succeeded: RefundRequest[];
+    failed: Array<{ id: string; error: string }>;
+  };
+  error?: string;
+}> {
+  if (!requestIds || requestIds.length === 0) {
+    return { success: false, error: "Nenhuma solicitação selecionada" };
+  }
+
+  try {
+    const refundService = new RefundService();
+    const result = await refundService.markBatchAsPaid(requestIds);
+    revalidatePath("/admin");
+
+    if (result.failed.length > 0) {
+      return {
+        success: false,
+        data: result,
+        error: `Falha ao marcar ${result.failed.length} solicitação(ões) como paga(s): ${result.failed
+          .map((f) => f.error)
+          .join(", ")}`,
+      };
+    }
+
+    return { success: true, data: result };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { success: false, error: errorMessage };
+  }
+}

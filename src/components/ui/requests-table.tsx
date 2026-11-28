@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BadgeCheck,
   Bot,
   CheckCircle,
   Download,
@@ -11,7 +12,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   processBatchReceiptsAction,
   processReceiptAction,
@@ -23,11 +24,14 @@ import {
 import {
   deleteBatchRefundRequestsAction,
   deleteRefundRequestAction,
+  markBatchRefundsAsPaidAction,
+  markRefundAsPaidAction,
   updateRefundRequestAction,
 } from "@/actions/refund.actions";
 import {
   REFUND_STATUS_MAP,
   type RefundRequest,
+  type RefundStatus,
   type UpdateRefundInput,
 } from "@/models/refund.model";
 import type { EmailSettings } from "@/models/settings.model";
@@ -76,6 +80,8 @@ export interface RequestsTableProps {
   ) => void | Promise<void>;
   onDeleteRequest?: (requestId: string) => void | Promise<void>;
   onDeleteBatch?: (requestIds: string[]) => Promise<void> | void;
+  onMarkAsPaid?: (requestId: string) => Promise<void> | void;
+  onMarkBatchAsPaid?: (requestIds: string[]) => Promise<void> | void;
 }
 
 export function RequestsTable({
@@ -88,6 +94,8 @@ export function RequestsTable({
   onEditRequest,
   onDeleteRequest,
   onDeleteBatch,
+  onMarkAsPaid,
+  onMarkBatchAsPaid,
 }: RequestsTableProps) {
   const router = useRouter();
   const [selectedReceiptUrl, setSelectedReceiptUrl] = useState<string | null>(
@@ -104,6 +112,8 @@ export function RequestsTable({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false);
+  const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
+  const [isBatchMarkingPaid, setIsBatchMarkingPaid] = useState(false);
 
   const [editingRequest, setEditingRequest] = useState<RefundRequest | null>(
     null,
@@ -116,7 +126,50 @@ export function RequestsTable({
   const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
-  const selectableRequests = requests;
+  const [statusFilter, setStatusFilter] = useState<"ALL" | RefundStatus>("ALL");
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [indicatorStyle, setIndicatorStyle] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    ready: boolean;
+  }>({ left: 0, top: 0, width: 0, height: 0, ready: false });
+
+  const updateIndicator = useCallback(() => {
+    const activeTab = tabRefs.current[statusFilter];
+    if (!activeTab) return;
+    setIndicatorStyle({
+      left: activeTab.offsetLeft,
+      top: activeTab.offsetTop,
+      width: activeTab.offsetWidth,
+      height: activeTab.offsetHeight,
+      ready: activeTab.offsetWidth > 0,
+    });
+  }, [statusFilter]);
+
+  useEffect(() => {
+    updateIndicator();
+    window.addEventListener("resize", updateIndicator);
+    return () => window.removeEventListener("resize", updateIndicator);
+  }, [updateIndicator]);
+
+  const statusCounts = {
+    ALL: requests.length,
+    PENDING: requests.filter((r) => r.status === "PENDING").length,
+    APPROVED: requests.filter((r) => r.status === "APPROVED").length,
+    SENT: requests.filter((r) => r.status === "SENT").length,
+    PAID: requests.filter((r) => r.status === "PAID").length,
+    DENIED: requests.filter((r) => r.status === "DENIED").length,
+    PROCESSING: requests.filter((r) => r.status === "PROCESSING").length,
+  };
+
+  const filteredRequests =
+    statusFilter === "ALL"
+      ? requests
+      : requests.filter((r) => r.status === statusFilter);
+
+  const selectableRequests = filteredRequests;
   const hasSelectableRequests = selectableRequests.length > 0;
   const allSelectableSelected =
     hasSelectableRequests &&
@@ -124,9 +177,11 @@ export function RequestsTable({
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedIds(selectableRequests.map((r) => r.id));
+      const filteredIds = filteredRequests.map((r) => r.id);
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...filteredIds])));
     } else {
-      setSelectedIds([]);
+      const filteredIds = filteredRequests.map((r) => r.id);
+      setSelectedIds((prev) => prev.filter((id) => !filteredIds.includes(id)));
     }
   };
 
@@ -144,6 +199,67 @@ export function RequestsTable({
   const selectedApprovedRequests = requests.filter(
     (r) => selectedIds.includes(r.id) && r.status === "APPROVED",
   );
+  const selectedSentIds = selectedIds.filter(
+    (id) => requests.find((r) => r.id === id)?.status === "SENT",
+  );
+
+  const handleMarkAsPaid = async (id: string) => {
+    setMarkingPaidId(id);
+    setErrorMessage(null);
+    try {
+      if (onMarkAsPaid) {
+        await onMarkAsPaid(id);
+      } else {
+        const result = await markRefundAsPaidAction(id);
+        if (!result.success) {
+          setErrorMessage(result.error);
+        } else {
+          router.refresh?.();
+        }
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setMarkingPaidId(null);
+    }
+  };
+
+  const handleMarkBatchAsPaid = async () => {
+    if (selectedSentIds.length === 0) return;
+    setIsBatchMarkingPaid(true);
+    setErrorMessage(null);
+    try {
+      if (onMarkBatchAsPaid) {
+        await onMarkBatchAsPaid(selectedSentIds);
+        setSelectedIds((prev) =>
+          prev.filter((id) => !selectedSentIds.includes(id)),
+        );
+      } else {
+        const result = await markBatchRefundsAsPaidAction(selectedSentIds);
+        if (result.success) {
+          setSelectedIds((prev) =>
+            prev.filter((id) => !selectedSentIds.includes(id)),
+          );
+          router.refresh?.();
+        } else {
+          setErrorMessage(
+            result.error || "Erro ao marcar solicitações como pagas",
+          );
+          if (result.data?.succeeded && result.data.succeeded.length > 0) {
+            const succeededIds = result.data.succeeded.map((r) => r.id);
+            setSelectedIds((prev) =>
+              prev.filter((id) => !succeededIds.includes(id)),
+            );
+          }
+          router.refresh?.();
+        }
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsBatchMarkingPaid(false);
+    }
+  };
 
   const handleProcessBatch = async () => {
     if (selectedPendingIds.length === 0) return;
@@ -349,55 +465,158 @@ export function RequestsTable({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
-        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-          {selectedIds.length} selecionado(s)
-        </span>
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={selectedIds.length === 0 || isExportingCsv}
-            onClick={handleExportCsv}
-          >
-            {isExportingCsv && (
-              <Loader2 className="size-4 animate-spin mr-1.5" />
-            )}
-            <Download className="size-4 mr-1.5" />
-            Exportar CSV
-          </Button>
-          <Button
-            type="button"
-            disabled={selectedPendingIds.length === 0 || isBatchProcessing}
-            onClick={handleProcessBatch}
-          >
-            {isBatchProcessing && (
-              <Loader2 className="size-4 animate-spin mr-1.5" />
-            )}
-            Aprovar para Leitura em Lote
-          </Button>
-          <Button
-            type="button"
-            disabled={selectedApprovedRequests.length === 0}
-            onClick={() => setIsBatchDialogOpen(true)}
-          >
-            Enviar Pagamentos em Lote
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            disabled={selectedIds.length === 0 || isBulkDeleting}
-            onClick={() => setIsBulkDeleteDialogOpen(true)}
-          >
-            {isBulkDeleting && (
-              <Loader2 className="size-4 animate-spin mr-1.5" />
-            )}
-            <Trash2 className="size-4 mr-1.5" />
-            Excluir Selecionados
-          </Button>
+    <div>
+      <div className="px-4 py-3 border-b border-border bg-card flex flex-wrap items-center justify-between gap-3">
+        <div
+          role="tablist"
+          aria-label="Filtrar solicitações por status"
+          className="relative inline-flex flex-wrap items-center gap-1 rounded-lg bg-muted p-1"
+        >
+          {indicatorStyle.ready && (
+            <span
+              aria-hidden="true"
+              style={{
+                transform: `translate3d(${indicatorStyle.left}px, ${indicatorStyle.top}px, 0)`,
+                width: `${indicatorStyle.width}px`,
+                height: `${indicatorStyle.height}px`,
+              }}
+              className="pointer-events-none absolute left-0 top-0 rounded-md bg-background shadow-sm transition-[transform,width,height] duration-200 ease-out"
+            />
+          )}
+          {(
+            [
+              { key: "ALL", label: "Todos", count: statusCounts.ALL },
+              {
+                key: "PENDING",
+                label: "Pendente",
+                count: statusCounts.PENDING,
+              },
+              {
+                key: "APPROVED",
+                label: "Aprovado",
+                count: statusCounts.APPROVED,
+              },
+              { key: "SENT", label: "Enviado", count: statusCounts.SENT },
+              { key: "PAID", label: "Pago", count: statusCounts.PAID },
+              { key: "DENIED", label: "Negado", count: statusCounts.DENIED },
+            ] as const
+          ).map((filter) => {
+            const isActive = statusFilter === filter.key;
+            return (
+              <button
+                key={filter.key}
+                ref={(el) => {
+                  tabRefs.current[filter.key] = el;
+                }}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setStatusFilter(filter.key)}
+                className={`relative z-10 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors duration-200 cursor-pointer ${
+                  isActive
+                    ? indicatorStyle.ready
+                      ? "text-foreground"
+                      : "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <span>{filter.label}</span>
+                <span
+                  className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] leading-none tabular-nums transition-colors duration-200 ${
+                    isActive
+                      ? "bg-primary/10 text-primary font-semibold"
+                      : "bg-background/60 text-muted-foreground"
+                  }`}
+                >
+                  {filter.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
+
+      {selectedIds.length > 0 && (
+        <div className="px-4 py-2.5 border-b border-primary/20 bg-primary/5 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">
+              {selectedIds.length} selecionado(s)
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedIds([])}
+            >
+              Limpar
+            </Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {selectedPendingIds.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                disabled={isBatchProcessing}
+                onClick={handleProcessBatch}
+              >
+                {isBatchProcessing && (
+                  <Loader2 className="size-4 animate-spin mr-1.5" />
+                )}
+                Aprovar para Leitura em Lote ({selectedPendingIds.length})
+              </Button>
+            )}
+            {selectedApprovedRequests.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setIsBatchDialogOpen(true)}
+              >
+                Enviar Pagamentos em Lote ({selectedApprovedRequests.length})
+              </Button>
+            )}
+            {selectedSentIds.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                disabled={isBatchMarkingPaid}
+                onClick={handleMarkBatchAsPaid}
+              >
+                {isBatchMarkingPaid && (
+                  <Loader2 className="size-4 animate-spin mr-1.5" />
+                )}
+                <BadgeCheck className="size-4 mr-1.5" />
+                Marcar como Pago em Lote ({selectedSentIds.length})
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isExportingCsv}
+              onClick={handleExportCsv}
+            >
+              {isExportingCsv && (
+                <Loader2 className="size-4 animate-spin mr-1.5" />
+              )}
+              <Download className="size-4 mr-1.5" />
+              Exportar CSV
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={isBulkDeleting}
+              onClick={() => setIsBulkDeleteDialogOpen(true)}
+            >
+              {isBulkDeleting && (
+                <Loader2 className="size-4 animate-spin mr-1.5" />
+              )}
+              <Trash2 className="size-4 mr-1.5" />
+              Excluir Selecionados ({selectedIds.length})
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="overflow-x-auto">
         {errorMessage && (
@@ -445,20 +664,22 @@ export function RequestsTable({
             </tr>
           </thead>
           <tbody>
-            {requests.length === 0 ? (
+            {filteredRequests.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                   Nenhuma solicitação encontrada.
                 </td>
               </tr>
             ) : (
-              requests.map((req) => {
+              filteredRequests.map((req) => {
                 const currentStatus = REFUND_STATUS_MAP[req.status];
                 const isSelected = selectedIds.includes(req.id);
                 const hasReceipt = Boolean(req.receipt_file_url);
                 const hasAiResponse = Boolean(req.raw_ai_response?.trim());
                 const canProcess = req.status === "PENDING";
-                const hasActions = hasReceipt || hasAiResponse || canProcess;
+                const canMarkAsPaid = req.status === "SENT";
+                const hasActions =
+                  hasReceipt || hasAiResponse || canProcess || canMarkAsPaid;
                 return (
                   <tr
                     key={req.id}
@@ -499,11 +720,16 @@ export function RequestsTable({
                     <td className="px-6 py-4">
                       <DropdownMenu>
                         <DropdownMenuTrigger
-                          disabled={!hasActions || processingId === req.id}
+                          disabled={
+                            !hasActions ||
+                            processingId === req.id ||
+                            markingPaidId === req.id
+                          }
                           aria-label={`Abrir menu de ações para ${req.requester_name}`}
                           className="inline-flex items-center justify-center rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white disabled:pointer-events-none disabled:opacity-50"
                         >
-                          {processingId === req.id ? (
+                          {processingId === req.id ||
+                          markingPaidId === req.id ? (
                             <Loader2 className="size-4 animate-spin" />
                           ) : (
                             <MoreHorizontal className="size-4" />
@@ -541,6 +767,15 @@ export function RequestsTable({
                             >
                               <CheckCircle className="size-4" />
                               Aprovar para Leitura
+                            </DropdownMenuItem>
+                          )}
+                          {canMarkAsPaid && (
+                            <DropdownMenuItem
+                              disabled={markingPaidId === req.id}
+                              onClick={() => handleMarkAsPaid(req.id)}
+                            >
+                              <BadgeCheck className="size-4" />
+                              Marcar como Pago
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuItem

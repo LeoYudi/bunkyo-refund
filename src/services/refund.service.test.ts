@@ -1320,4 +1320,332 @@ describe("RefundService", () => {
       });
     });
   });
+
+  describe("markAsPaid", () => {
+    const mockSentRequest: RefundRequest = {
+      id: "req-sent-1",
+      requester_name: "Elena Ramos",
+      status: "SENT",
+      issuer_name: "Restaurante Bunkyo",
+      issuer_cnpj: "12.345.678/0001-90",
+      receiver_cnpj: "98.765.432/0001-10",
+      total_value: 180.0,
+      issue_date: "2026-10-25",
+      issue_number: "NF-301",
+      description: "Almoço evento",
+      receipt_file_url:
+        "https://supabase.co/storage/v1/object/public/receipts/20261025-doc.pdf",
+      created_at: "2026-10-25T10:00:00Z",
+      updated_at: "2026-10-25T10:00:00Z",
+      reviewed_by: "admin-1",
+    };
+
+    it("should fetch request by id, call repository.updateStatus(id, 'PAID') when status is SENT, and return updated request", async () => {
+      const service = new RefundService();
+      const mockPaidRequest: RefundRequest = {
+        ...mockSentRequest,
+        status: "PAID",
+      };
+
+      mockRepositoryInstance.findById.mockResolvedValue(mockSentRequest);
+      mockRepositoryInstance.updateStatus.mockResolvedValue(mockPaidRequest);
+
+      const result = await service.markAsPaid("req-sent-1");
+
+      expect(mockRepositoryInstance.findById).toHaveBeenCalledWith(
+        "req-sent-1",
+      );
+      expect(mockRepositoryInstance.updateStatus).toHaveBeenCalledWith(
+        "req-sent-1",
+        "PAID",
+      );
+      expect(result).toEqual(mockPaidRequest);
+    });
+
+    it("should throw 'Solicitação de reembolso não encontrada' when request is not found and not call updateStatus", async () => {
+      const service = new RefundService();
+      mockRepositoryInstance.findById.mockResolvedValue(null);
+
+      await expect(service.markAsPaid("req-404")).rejects.toThrow(
+        "Solicitação de reembolso não encontrada",
+      );
+
+      expect(mockRepositoryInstance.findById).toHaveBeenCalledWith("req-404");
+      expect(mockRepositoryInstance.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it.each(["PENDING", "PROCESSING", "APPROVED", "DENIED", "PAID"] as const)(
+      "should throw a descriptive error and not call repository.updateStatus when current status is %s",
+      async (status) => {
+        const service = new RefundService();
+        mockRepositoryInstance.findById.mockResolvedValue({
+          ...mockSentRequest,
+          status,
+        });
+
+        await expect(service.markAsPaid("req-sent-1")).rejects.toThrow(
+          /apenas.*(sent|enviado)|status.*(sent|enviado)/i,
+        );
+
+        expect(mockRepositoryInstance.findById).toHaveBeenCalledWith(
+          "req-sent-1",
+        );
+        expect(mockRepositoryInstance.updateStatus).not.toHaveBeenCalled();
+      },
+    );
+
+    it("should propagate errors thrown by repository.updateStatus", async () => {
+      const service = new RefundService();
+      mockRepositoryInstance.findById.mockResolvedValue(mockSentRequest);
+      mockRepositoryInstance.updateStatus.mockRejectedValue(
+        new Error("Erro ao atualizar status no banco"),
+      );
+
+      await expect(service.markAsPaid("req-sent-1")).rejects.toThrow(
+        "Erro ao atualizar status no banco",
+      );
+    });
+  });
+
+  describe("markBatchAsPaid", () => {
+    const mockSentReq1: RefundRequest = {
+      id: "req-sent-1",
+      requester_name: "Elena Ramos",
+      status: "SENT",
+      issuer_name: "Restaurante Sabor",
+      issuer_cnpj: "12.345.678/0001-90",
+      receiver_cnpj: null,
+      total_value: 150.5,
+      issue_date: "2026-10-20",
+      issue_number: "NF-101",
+      description: "Almoço",
+      receipt_file_url:
+        "https://supabase.co/storage/v1/object/public/receipts/20261020-doc1.pdf",
+      created_at: "2026-10-20T10:00:00Z",
+      updated_at: "2026-10-20T10:00:00Z",
+      reviewed_by: "admin-1",
+    };
+
+    const mockSentReq2: RefundRequest = {
+      ...mockSentReq1,
+      id: "req-sent-2",
+      requester_name: "Felipe Costa",
+      total_value: 90.0,
+      receipt_file_url:
+        "https://supabase.co/storage/v1/object/public/receipts/20261021-doc2.pdf",
+    };
+
+    const mockPaidReq1: RefundRequest = {
+      ...mockSentReq1,
+      status: "PAID",
+    };
+
+    const mockPaidReq2: RefundRequest = {
+      ...mockSentReq2,
+      status: "PAID",
+    };
+
+    it("should throw 'Nenhuma solicitação selecionada' when requestIds is empty without calling repository", async () => {
+      const service = new RefundService();
+
+      await expect(service.markBatchAsPaid([])).rejects.toThrow(
+        "Nenhuma solicitação selecionada",
+      );
+
+      expect(mockRepositoryInstance.findById).not.toHaveBeenCalled();
+      expect(mockRepositoryInstance.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it("should use Promise.allSettled calling markAsPaid for each ID and return { succeeded, failed: [] } when all SENT requests succeed", async () => {
+      const service = new RefundService();
+      const markAsPaidSpy = vi.spyOn(service, "markAsPaid");
+      const allSettledSpy = vi.spyOn(Promise, "allSettled");
+
+      mockRepositoryInstance.findById.mockImplementation(async (id: string) => {
+        if (id === "req-sent-1") return mockSentReq1;
+        if (id === "req-sent-2") return mockSentReq2;
+        return null;
+      });
+      mockRepositoryInstance.updateStatus.mockImplementation(
+        async (id: string, status: RefundRequest["status"]) => {
+          const base = id === "req-sent-1" ? mockSentReq1 : mockSentReq2;
+          return { ...base, status };
+        },
+      );
+
+      try {
+        const result = await service.markBatchAsPaid([
+          "req-sent-1",
+          "req-sent-2",
+        ]);
+
+        expect(allSettledSpy).toHaveBeenCalledTimes(1);
+        expect(markAsPaidSpy).toHaveBeenCalledTimes(2);
+        expect(markAsPaidSpy).toHaveBeenCalledWith("req-sent-1");
+        expect(markAsPaidSpy).toHaveBeenCalledWith("req-sent-2");
+        expect(mockRepositoryInstance.updateStatus).toHaveBeenCalledWith(
+          "req-sent-1",
+          "PAID",
+        );
+        expect(mockRepositoryInstance.updateStatus).toHaveBeenCalledWith(
+          "req-sent-2",
+          "PAID",
+        );
+        expect(result).toEqual({
+          succeeded: [mockPaidReq1, mockPaidReq2],
+          failed: [],
+        });
+      } finally {
+        allSettledSpy.mockRestore();
+        markAsPaidSpy.mockRestore();
+      }
+    });
+
+    it("should continue processing remaining IDs when one request is not found and return partial succeeded and failed", async () => {
+      const service = new RefundService();
+
+      mockRepositoryInstance.findById.mockImplementation(async (id: string) => {
+        if (id === "req-sent-1") return mockSentReq1;
+        return null;
+      });
+      mockRepositoryInstance.updateStatus.mockResolvedValue(mockPaidReq1);
+
+      const result = await service.markBatchAsPaid([
+        "req-sent-1",
+        "req-missing",
+      ]);
+
+      expect(mockRepositoryInstance.updateStatus).toHaveBeenCalledWith(
+        "req-sent-1",
+        "PAID",
+      );
+      expect(mockRepositoryInstance.updateStatus).not.toHaveBeenCalledWith(
+        "req-missing",
+        "PAID",
+      );
+      expect(result).toEqual({
+        succeeded: [mockPaidReq1],
+        failed: [
+          {
+            id: "req-missing",
+            error: "Solicitação de reembolso não encontrada",
+          },
+        ],
+      });
+    });
+
+    it("should continue processing remaining IDs when one request has status different from SENT (e.g. APPROVED)", async () => {
+      const service = new RefundService();
+      const mockApprovedReq: RefundRequest = {
+        ...mockSentReq2,
+        id: "req-approved",
+        status: "APPROVED",
+      };
+
+      mockRepositoryInstance.findById.mockImplementation(async (id: string) => {
+        if (id === "req-sent-1") return mockSentReq1;
+        if (id === "req-approved") return mockApprovedReq;
+        return null;
+      });
+      mockRepositoryInstance.updateStatus.mockResolvedValue(mockPaidReq1);
+
+      const result = await service.markBatchAsPaid([
+        "req-sent-1",
+        "req-approved",
+      ]);
+
+      expect(mockRepositoryInstance.updateStatus).toHaveBeenCalledWith(
+        "req-sent-1",
+        "PAID",
+      );
+      expect(mockRepositoryInstance.updateStatus).not.toHaveBeenCalledWith(
+        "req-approved",
+        "PAID",
+      );
+      expect(result).toEqual({
+        succeeded: [mockPaidReq1],
+        failed: [
+          {
+            id: "req-approved",
+            error: expect.stringMatching(/sent|enviado/i),
+          },
+        ],
+      });
+    });
+
+    it("should continue processing remaining IDs when repository.updateStatus fails for one ID", async () => {
+      const service = new RefundService();
+
+      mockRepositoryInstance.findById.mockImplementation(async (id: string) => {
+        if (id === "req-sent-1") return mockSentReq1;
+        if (id === "req-sent-2") return mockSentReq2;
+        return null;
+      });
+      mockRepositoryInstance.updateStatus.mockImplementation(
+        async (id: string) => {
+          if (id === "req-sent-2") {
+            throw new Error("Erro ao atualizar no banco");
+          }
+          return mockPaidReq1;
+        },
+      );
+
+      const result = await service.markBatchAsPaid([
+        "req-sent-1",
+        "req-sent-2",
+      ]);
+
+      expect(mockRepositoryInstance.updateStatus).toHaveBeenCalledWith(
+        "req-sent-1",
+        "PAID",
+      );
+      expect(mockRepositoryInstance.updateStatus).toHaveBeenCalledWith(
+        "req-sent-2",
+        "PAID",
+      );
+      expect(result).toEqual({
+        succeeded: [mockPaidReq1],
+        failed: [
+          {
+            id: "req-sent-2",
+            error: "Erro ao atualizar no banco",
+          },
+        ],
+      });
+    });
+
+    it("should return empty succeeded and all failed items when every item in the batch fails", async () => {
+      const service = new RefundService();
+      const mockPendingReq: RefundRequest = {
+        ...mockSentReq2,
+        id: "req-pending",
+        status: "PENDING",
+      };
+
+      mockRepositoryInstance.findById.mockImplementation(async (id: string) => {
+        if (id === "req-pending") return mockPendingReq;
+        return null;
+      });
+
+      const result = await service.markBatchAsPaid([
+        "req-missing",
+        "req-pending",
+      ]);
+
+      expect(mockRepositoryInstance.updateStatus).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        succeeded: [],
+        failed: [
+          {
+            id: "req-missing",
+            error: "Solicitação de reembolso não encontrada",
+          },
+          {
+            id: "req-pending",
+            error: expect.stringMatching(/sent|enviado/i),
+          },
+        ],
+      });
+    });
+  });
 });

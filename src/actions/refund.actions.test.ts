@@ -12,6 +12,8 @@ const {
   updateRefundRequestAction,
   deleteRefundRequestAction,
   deleteBatchRefundRequestsAction,
+  markRefundAsPaidAction,
+  markBatchRefundsAsPaidAction,
 } = refundActions as unknown as {
   submitRefundRequest: typeof refundActions.submitRefundRequest;
   getRefundRequestsAction: typeof refundActions.getRefundRequestsAction;
@@ -30,6 +32,8 @@ const {
     };
     error?: string;
   }>;
+  markRefundAsPaidAction: typeof refundActions.markRefundAsPaidAction;
+  markBatchRefundsAsPaidAction: typeof refundActions.markBatchRefundsAsPaidAction;
 };
 
 vi.mock("next/cache", () => ({
@@ -456,6 +460,249 @@ describe("deleteBatchRefundRequestsAction", () => {
     );
 
     const result = await deleteBatchRefundRequestsAction(["req-1"]);
+
+    expect(revalidatePath).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      success: false,
+      error: "Falha crítica desconhecida",
+    });
+  });
+});
+
+describe("markRefundAsPaidAction", () => {
+  let mockServiceInstance: {
+    markAsPaid: ReturnType<typeof vi.fn>;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    mockServiceInstance = {
+      markAsPaid: vi.fn(),
+    };
+
+    // biome-ignore lint/complexity/useArrowFunction: constructor mock requires function
+    vi.mocked(RefundService).mockImplementation(function () {
+      return mockServiceInstance as unknown as RefundService;
+    });
+  });
+
+  it("should call refundService.markAsPaid, revalidatePath('/admin'), and return { success: true, data }", async () => {
+    const mockPaidRequest: RefundRequest = {
+      id: "req-sent-1",
+      requester_name: "Elena Ramos",
+      receipt_file_url: "https://example.com/receipt.pdf",
+      status: "PAID",
+      created_at: "2026-10-25T10:00:00Z",
+      updated_at: "2026-10-26T10:00:00Z",
+      reviewed_by: "admin-1",
+      issuer_name: "Restaurante Bunkyo",
+      issuer_cnpj: "12.345.678/0001-90",
+      receiver_cnpj: "98.765.432/0001-10",
+      total_value: 150.0,
+      issue_date: "2026-10-25",
+      issue_number: "NF-100",
+      description: "Almoço evento",
+    };
+
+    mockServiceInstance.markAsPaid.mockResolvedValue(mockPaidRequest);
+
+    const result = await markRefundAsPaidAction("req-sent-1");
+
+    expect(RefundService).toHaveBeenCalled();
+    expect(mockServiceInstance.markAsPaid).toHaveBeenCalledWith("req-sent-1");
+    expect(revalidatePath).toHaveBeenCalledWith("/admin");
+    expect(result).toEqual({ success: true, data: mockPaidRequest });
+  });
+
+  it("should return { success: false, error } without calling revalidatePath when RefundService throws an Error", async () => {
+    mockServiceInstance.markAsPaid.mockRejectedValue(
+      new Error(
+        "Apenas solicitações com status Enviado (SENT) podem ser marcadas como pagas",
+      ),
+    );
+
+    const result = await markRefundAsPaidAction("req-pending-1");
+
+    expect(mockServiceInstance.markAsPaid).toHaveBeenCalledWith(
+      "req-pending-1",
+    );
+    expect(revalidatePath).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      success: false,
+      error:
+        "Apenas solicitações com status Enviado (SENT) podem ser marcadas como pagas",
+    });
+  });
+
+  it("should handle non-Error exceptions and return { success: false, error } with stringified error", async () => {
+    mockServiceInstance.markAsPaid.mockRejectedValue(
+      "Falha desconhecida ao marcar como pago",
+    );
+
+    const result = await markRefundAsPaidAction("req-1");
+
+    expect(revalidatePath).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      success: false,
+      error: "Falha desconhecida ao marcar como pago",
+    });
+  });
+});
+
+describe("markBatchRefundsAsPaidAction", () => {
+  let mockServiceInstance: {
+    markBatchAsPaid: ReturnType<typeof vi.fn>;
+  };
+
+  const mockPaidReq1: RefundRequest = {
+    id: "req-sent-1",
+    requester_name: "Elena Ramos",
+    receipt_file_url: "https://example.com/1.pdf",
+    status: "PAID",
+    created_at: "2026-10-25T10:00:00Z",
+    updated_at: "2026-10-26T10:00:00Z",
+    reviewed_by: "admin-1",
+    issuer_name: "Restaurante Sabor",
+    issuer_cnpj: "12.345.678/0001-90",
+    receiver_cnpj: null,
+    total_value: 150.0,
+    issue_date: "2026-10-25",
+    issue_number: "NF-101",
+    description: "Almoço",
+  };
+
+  const mockPaidReq2: RefundRequest = {
+    ...mockPaidReq1,
+    id: "req-sent-2",
+    requester_name: "Felipe Costa",
+    total_value: 90.0,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    mockServiceInstance = {
+      markBatchAsPaid: vi.fn(),
+    };
+
+    // biome-ignore lint/complexity/useArrowFunction: constructor mock requires function
+    vi.mocked(RefundService).mockImplementation(function () {
+      return mockServiceInstance as unknown as RefundService;
+    });
+  });
+
+  it("should return { success: false, error: 'Nenhuma solicitação selecionada' } when requestIds is empty without calling RefundService or revalidatePath", async () => {
+    const result = await markBatchRefundsAsPaidAction([]);
+
+    expect(result).toEqual({
+      success: false,
+      error: "Nenhuma solicitação selecionada",
+    });
+    expect(RefundService).not.toHaveBeenCalled();
+    expect(mockServiceInstance.markBatchAsPaid).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("should call refundService.markBatchAsPaid, revalidatePath('/admin'), and return { success: true, data } when all succeed", async () => {
+    const batchResult = {
+      succeeded: [mockPaidReq1, mockPaidReq2],
+      failed: [],
+    };
+    mockServiceInstance.markBatchAsPaid.mockResolvedValue(batchResult);
+
+    const result = await markBatchRefundsAsPaidAction([
+      "req-sent-1",
+      "req-sent-2",
+    ]);
+
+    expect(RefundService).toHaveBeenCalled();
+    expect(mockServiceInstance.markBatchAsPaid).toHaveBeenCalledWith([
+      "req-sent-1",
+      "req-sent-2",
+    ]);
+    expect(revalidatePath).toHaveBeenCalledWith("/admin");
+    expect(result).toEqual({
+      success: true,
+      data: batchResult,
+    });
+  });
+
+  it("should revalidatePath('/admin') and return { success: false, data, error } when there are partial failures (failed.length > 0)", async () => {
+    const batchResult = {
+      succeeded: [mockPaidReq1],
+      failed: [
+        {
+          id: "req-sent-2",
+          error: "Solicitação de reembolso não encontrada",
+        },
+      ],
+    };
+    mockServiceInstance.markBatchAsPaid.mockResolvedValue(batchResult);
+
+    const result = await markBatchRefundsAsPaidAction([
+      "req-sent-1",
+      "req-sent-2",
+    ]);
+
+    expect(mockServiceInstance.markBatchAsPaid).toHaveBeenCalledWith([
+      "req-sent-1",
+      "req-sent-2",
+    ]);
+    expect(revalidatePath).toHaveBeenCalledWith("/admin");
+    expect(result).toEqual({
+      success: false,
+      data: batchResult,
+      error: expect.stringContaining("Solicitação de reembolso não encontrada"),
+    });
+    expect(result.error).toMatch(/falha/i);
+  });
+
+  it("should revalidatePath('/admin') and return { success: false, data, error } when all items fail (failed.length > 0)", async () => {
+    const batchResult = {
+      succeeded: [],
+      failed: [
+        { id: "req-1", error: "Status inválido" },
+        { id: "req-2", error: "Erro no banco" },
+      ],
+    };
+    mockServiceInstance.markBatchAsPaid.mockResolvedValue(batchResult);
+
+    const result = await markBatchRefundsAsPaidAction(["req-1", "req-2"]);
+
+    expect(revalidatePath).toHaveBeenCalledWith("/admin");
+    expect(result).toEqual({
+      success: false,
+      data: batchResult,
+      error: expect.stringContaining("Status inválido"),
+    });
+    expect(result.error).toContain("Erro no banco");
+    expect(result.error).toMatch(/falha/i);
+  });
+
+  it("should return { success: false, error } without calling revalidatePath when refundService.markBatchAsPaid throws an unexpected exception", async () => {
+    mockServiceInstance.markBatchAsPaid.mockRejectedValue(
+      new Error("Erro inesperado ao marcar lote como pago"),
+    );
+
+    const result = await markBatchRefundsAsPaidAction([
+      "req-sent-1",
+      "req-sent-2",
+    ]);
+
+    expect(revalidatePath).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      success: false,
+      error: "Erro inesperado ao marcar lote como pago",
+    });
+  });
+
+  it("should handle non-Error exceptions and return { success: false, error } with stringified error", async () => {
+    mockServiceInstance.markBatchAsPaid.mockRejectedValue(
+      "Falha crítica desconhecida",
+    );
+
+    const result = await markBatchRefundsAsPaidAction(["req-sent-1"]);
 
     expect(revalidatePath).not.toHaveBeenCalled();
     expect(result).toEqual({

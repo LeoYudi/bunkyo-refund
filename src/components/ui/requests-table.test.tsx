@@ -37,12 +37,16 @@ vi.mock("@/actions/refund.actions", () => ({
   updateRefundRequestAction: vi.fn(),
   deleteRefundRequestAction: vi.fn(),
   deleteBatchRefundRequestsAction: vi.fn(),
+  markRefundAsPaidAction: vi.fn(),
+  markBatchRefundsAsPaidAction: vi.fn(),
 }));
 
 const {
   updateRefundRequestAction,
   deleteRefundRequestAction,
   deleteBatchRefundRequestsAction,
+  markRefundAsPaidAction,
+  markBatchRefundsAsPaidAction,
 } = refundActions as unknown as {
   updateRefundRequestAction: typeof refundActions.updateRefundRequestAction;
   deleteRefundRequestAction: typeof refundActions.deleteRefundRequestAction;
@@ -54,9 +58,18 @@ const {
     };
     error?: string;
   }>;
+  markRefundAsPaidAction: typeof refundActions.markRefundAsPaidAction;
+  markBatchRefundsAsPaidAction: typeof refundActions.markBatchRefundsAsPaidAction;
 };
 
 type RefundRequest = Database["public"]["Tables"]["refund_requests"]["Row"];
+
+const findStatusFilterControl = (label: string) => {
+  const name = new RegExp(`^${label}(?:\\s|$|\\(|·|\\d)`, "i");
+  return (
+    screen.queryByRole("tab", { name }) ?? screen.getByRole("button", { name })
+  );
+};
 
 describe("RequestsTable", () => {
   beforeEach(() => {
@@ -82,6 +95,14 @@ describe("RequestsTable", () => {
       success: true,
     });
     vi.mocked(deleteBatchRefundRequestsAction).mockResolvedValue({
+      success: true,
+      data: { succeeded: [], failed: [] },
+    });
+    vi.mocked(markRefundAsPaidAction).mockResolvedValue({
+      success: true,
+      data: {} as RefundRequest,
+    });
+    vi.mocked(markBatchRefundsAsPaidAction).mockResolvedValue({
       success: true,
       data: { succeeded: [], failed: [] },
     });
@@ -137,11 +158,12 @@ describe("RequestsTable", () => {
 
     render(<RequestsTable requests={mockRequests} />);
 
-    // Should render names and statuses
-    expect(screen.getByText("Alice")).toBeInTheDocument();
-    expect(screen.getByText("Bob")).toBeInTheDocument();
-    expect(screen.getByText("Pendente")).toBeInTheDocument();
-    expect(screen.getByText("Aprovado")).toBeInTheDocument();
+    // Should render names and statuses inside the table
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("Alice")).toBeInTheDocument();
+    expect(within(table).getByText("Bob")).toBeInTheDocument();
+    expect(within(table).getByText("Pendente")).toBeInTheDocument();
+    expect(within(table).getByText("Aprovado")).toBeInTheDocument();
   });
 
   describe("Row Actions DropdownMenu and ReceiptModal Integration", () => {
@@ -522,7 +544,7 @@ describe("RequestsTable", () => {
         <RequestsTable requests={[createRequestWithStatus("1", "PENDING")]} />,
       );
 
-      const badgeText = screen.getByText("Pendente");
+      const badgeText = within(screen.getByRole("table")).getByText("Pendente");
       const badge = badgeText.closest('[data-slot="badge"]') ?? badgeText;
       expect(badge).toHaveAttribute("data-slot", "badge");
       expect(badge.className).toMatch(/gray|zinc|neutral|muted|slate/i);
@@ -535,7 +557,9 @@ describe("RequestsTable", () => {
         />,
       );
 
-      const badgeText = screen.getByText("Processando");
+      const badgeText = within(screen.getByRole("table")).getByText(
+        "Processando",
+      );
       const badge = badgeText.closest('[data-slot="badge"]') ?? badgeText;
       expect(badge).toHaveAttribute("data-slot", "badge");
       expect(badge.className).toMatch(/amber|yellow/i);
@@ -546,7 +570,7 @@ describe("RequestsTable", () => {
         <RequestsTable requests={[createRequestWithStatus("3", "APPROVED")]} />,
       );
 
-      const badgeText = screen.getByText("Aprovado");
+      const badgeText = within(screen.getByRole("table")).getByText("Aprovado");
       const badge = badgeText.closest('[data-slot="badge"]') ?? badgeText;
       expect(badge).toHaveAttribute("data-slot", "badge");
       expect(badge.className).toMatch(/blue/i);
@@ -557,7 +581,7 @@ describe("RequestsTable", () => {
         <RequestsTable requests={[createRequestWithStatus("4", "DENIED")]} />,
       );
 
-      const badgeText = screen.getByText("Negado");
+      const badgeText = within(screen.getByRole("table")).getByText("Negado");
       const badge = badgeText.closest('[data-slot="badge"]') ?? badgeText;
       expect(badge).toHaveAttribute("data-slot", "badge");
       expect(badge.className).toMatch(/red|destructive/i);
@@ -568,7 +592,7 @@ describe("RequestsTable", () => {
         <RequestsTable requests={[createRequestWithStatus("5", "SENT")]} />,
       );
 
-      const badgeText = screen.getByText("Enviado");
+      const badgeText = within(screen.getByRole("table")).getByText("Enviado");
       const badge = badgeText.closest('[data-slot="badge"]') ?? badgeText;
       expect(badge).toHaveAttribute("data-slot", "badge");
       expect(badge.className).toMatch(/purple|violet/i);
@@ -579,7 +603,7 @@ describe("RequestsTable", () => {
         <RequestsTable requests={[createRequestWithStatus("6", "PAID")]} />,
       );
 
-      const badgeText = screen.getByText("Pago");
+      const badgeText = within(screen.getByRole("table")).getByText("Pago");
       const badge = badgeText.closest('[data-slot="badge"]') ?? badgeText;
       expect(badge).toHaveAttribute("data-slot", "badge");
       expect(badge.className).toMatch(/green|emerald/i);
@@ -595,11 +619,11 @@ describe("RequestsTable", () => {
         createRequestWithStatus("6", "PAID"),
       ];
 
-      const { container } = render(
-        <RequestsTable requests={allStatusRequests} />,
-      );
+      render(<RequestsTable requests={allStatusRequests} />);
 
-      const badges = container.querySelectorAll('[data-slot="badge"]');
+      const badges = screen
+        .getByRole("table")
+        .querySelectorAll('[data-slot="badge"]');
       expect(badges).toHaveLength(6);
 
       expect(screen.queryByText("PENDING")).not.toBeInTheDocument();
@@ -765,7 +789,7 @@ describe("RequestsTable", () => {
       expect(paidCb).not.toBeDisabled();
     });
 
-    it("should select all rows across all statuses when clicking header select-all checkbox", () => {
+    it("should select all rows across all statuses when clicking header select-all checkbox and hide contextual bar when deselected", () => {
       render(<RequestsTable requests={bulkMockRequests} />);
 
       const selectAllCheckbox = screen.getByRole("checkbox", {
@@ -777,28 +801,45 @@ describe("RequestsTable", () => {
       expect(screen.getByText(/7 selecionado\(s\)/i)).toBeInTheDocument();
 
       fireEvent.click(selectAllCheckbox);
-      expect(screen.getByText(/0 selecionado\(s\)/i)).toBeInTheDocument();
+      expect(screen.queryByText(/selecionado\(s\)/i)).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /limpar/i }),
+      ).not.toBeInTheDocument();
+      expect(selectAllCheckbox).not.toBeChecked();
     });
 
-    it("should display the top action bar with '0 selecionado(s)' and both 'Aprovar para Leitura em Lote' and 'Enviar Pagamentos em Lote' buttons disabled initially", () => {
+    it("should NOT render batch action buttons or selection counter initially when 0 requests are selected", () => {
       render(<RequestsTable requests={bulkMockRequests} />);
 
-      expect(screen.getByText(/0 selecionado\(s\)/i)).toBeInTheDocument();
+      expect(screen.queryByText(/selecionado\(s\)/i)).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /limpar/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /aprovar para leitura/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /enviar pagamentos/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /marcar como pago/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /exportar csv/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /excluir/i }),
+      ).not.toBeInTheDocument();
 
-      const batchApproveButton = screen.getByRole("button", {
-        name: /aprovar para leitura em lote/i,
-      });
-      expect(batchApproveButton).toBeInTheDocument();
-      expect(batchApproveButton).toBeDisabled();
-
-      const batchPaymentButton = screen.getByRole("button", {
-        name: /enviar pagamentos em lote/i,
-      });
-      expect(batchPaymentButton).toBeInTheDocument();
-      expect(batchPaymentButton).toBeDisabled();
+      expect(findStatusFilterControl("Todos")).toBeInTheDocument();
+      expect(findStatusFilterControl("Pendente")).toBeInTheDocument();
+      expect(findStatusFilterControl("Aprovado")).toBeInTheDocument();
+      expect(findStatusFilterControl("Enviado")).toBeInTheDocument();
+      expect(findStatusFilterControl("Pago")).toBeInTheDocument();
+      expect(findStatusFilterControl("Negado")).toBeInTheDocument();
     });
 
-    it("should enable 'Aprovar para Leitura em Lote' and keep 'Enviar Pagamentos em Lote' disabled when only a PENDING row is selected", () => {
+    it("should render 'Aprovar para Leitura em Lote (1)' and NOT render 'Enviar Pagamentos em Lote' or 'Marcar como Pago em Lote' when only a PENDING row is selected", () => {
       render(<RequestsTable requests={bulkMockRequests} />);
 
       const allCheckboxes = screen.getAllByRole("checkbox");
@@ -807,19 +848,31 @@ describe("RequestsTable", () => {
       fireEvent.click(pendingCb);
 
       expect(screen.getByText(/1 selecionado\(s\)/i)).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /limpar/i }),
+      ).toBeInTheDocument();
 
       const batchApproveButton = screen.getByRole("button", {
-        name: /aprovar para leitura em lote/i,
+        name: /aprovar para leitura em lote\s*\(1\)/i,
       });
-      const batchPaymentButton = screen.getByRole("button", {
-        name: /enviar pagamentos em lote/i,
-      });
-
+      expect(batchApproveButton).toBeInTheDocument();
       expect(batchApproveButton).not.toBeDisabled();
-      expect(batchPaymentButton).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: /exportar csv/i }),
+      ).not.toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: /excluir selecionados\s*\(1\)/i }),
+      ).not.toBeDisabled();
+
+      expect(
+        screen.queryByRole("button", { name: /enviar pagamentos em lote/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /marcar como pago em lote/i }),
+      ).not.toBeInTheDocument();
     });
 
-    it("should enable 'Enviar Pagamentos em Lote' and keep 'Aprovar para Leitura em Lote' disabled when only an APPROVED row is selected", () => {
+    it("should render 'Enviar Pagamentos em Lote (1)' and NOT render 'Aprovar para Leitura em Lote' or 'Marcar como Pago em Lote' when only an APPROVED row is selected", () => {
       render(<RequestsTable requests={bulkMockRequests} />);
 
       const allCheckboxes = screen.getAllByRole("checkbox");
@@ -828,19 +881,31 @@ describe("RequestsTable", () => {
       fireEvent.click(approved1Cb);
 
       expect(screen.getByText(/1 selecionado\(s\)/i)).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /limpar/i }),
+      ).toBeInTheDocument();
 
-      const batchApproveButton = screen.getByRole("button", {
-        name: /aprovar para leitura em lote/i,
-      });
       const batchPaymentButton = screen.getByRole("button", {
-        name: /enviar pagamentos em lote/i,
+        name: /enviar pagamentos em lote\s*\(1\)/i,
       });
-
+      expect(batchPaymentButton).toBeInTheDocument();
       expect(batchPaymentButton).not.toBeDisabled();
-      expect(batchApproveButton).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: /exportar csv/i }),
+      ).not.toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: /excluir selecionados\s*\(1\)/i }),
+      ).not.toBeDisabled();
+
+      expect(
+        screen.queryByRole("button", { name: /aprovar para leitura em lote/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /marcar como pago em lote/i }),
+      ).not.toBeInTheDocument();
     });
 
-    it("should keep 'Aprovar para Leitura em Lote' and 'Enviar Pagamentos em Lote' disabled while enabling 'Excluir Selecionados' when PROCESSING, DENIED, SENT, or PAID rows are selected", () => {
+    it("should NOT render 'Aprovar para Leitura em Lote' or 'Enviar Pagamentos em Lote' while rendering 'Marcar como Pago em Lote (1)' and 'Excluir Selecionados (4)' when PROCESSING, DENIED, SENT, and PAID rows are selected", () => {
       render(<RequestsTable requests={bulkMockRequests} />);
 
       const allCheckboxes = screen.getAllByRole("checkbox");
@@ -856,19 +921,23 @@ describe("RequestsTable", () => {
 
       expect(screen.getByText(/4 selecionado\(s\)/i)).toBeInTheDocument();
 
-      const batchApproveButton = screen.getByRole("button", {
-        name: /aprovar para leitura em lote/i,
-      });
-      const batchPaymentButton = screen.getByRole("button", {
-        name: /enviar pagamentos em lote/i,
-      });
-      const bulkDeleteButton = screen.getByRole("button", {
-        name: /excluir selecionados/i,
-      });
-
-      expect(batchApproveButton).toBeDisabled();
-      expect(batchPaymentButton).toBeDisabled();
-      expect(bulkDeleteButton).not.toBeDisabled();
+      expect(
+        screen.queryByRole("button", { name: /aprovar para leitura em lote/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /enviar pagamentos em lote/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("button", {
+          name: /marcar como pago em lote\s*\(1\)/i,
+        }),
+      ).not.toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: /exportar csv/i }),
+      ).not.toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: /excluir selecionados\s*\(4\)/i }),
+      ).not.toBeDisabled();
     });
 
     it("should call processBatchReceiptsAction with only selected PENDING request IDs when both PENDING and APPROVED rows are selected and 'Aprovar para Leitura em Lote' is clicked", async () => {
@@ -921,20 +990,22 @@ describe("RequestsTable", () => {
       expect(screen.getByText(/R\$\s*600,00/)).toBeInTheDocument();
     });
 
-    it("should render 'Exportar CSV' button disabled initially, enable it when any request is selected, and call exportToCsvAction with selectedIds when clicked", async () => {
+    it("should NOT render 'Exportar CSV' button initially when 0 selected, render it enabled when any request is selected, and call exportToCsvAction with selectedIds when clicked", async () => {
       render(<RequestsTable requests={bulkMockRequests} />);
 
-      const exportCsvButton = screen.getByRole("button", {
-        name: /exportar csv/i,
-      });
-      expect(exportCsvButton).toBeInTheDocument();
-      expect(exportCsvButton).toBeDisabled();
+      expect(
+        screen.queryByRole("button", { name: /exportar csv/i }),
+      ).not.toBeInTheDocument();
 
       const allCheckboxes = screen.getAllByRole("checkbox");
       const pendingCb = allCheckboxes[1];
       const approved1Cb = allCheckboxes[2];
 
       fireEvent.click(pendingCb);
+      const exportCsvButton = screen.getByRole("button", {
+        name: /exportar csv/i,
+      });
+      expect(exportCsvButton).toBeInTheDocument();
       expect(exportCsvButton).not.toBeDisabled();
 
       fireEvent.click(approved1Cb);
@@ -1277,35 +1348,36 @@ describe("RequestsTable", () => {
       }
     >;
 
-    it("should render 'Excluir Selecionados' button in the top bar disabled initially when 0 selecionado(s)", () => {
+    it("should NOT render 'Excluir Selecionados' button or '0 selecionado(s)' initially when no requests are selected", () => {
       render(<RequestsTable requests={bulkDeleteMockRequests} />);
 
-      expect(screen.getByText(/0 selecionado\(s\)/i)).toBeInTheDocument();
-      const bulkDeleteButton = screen.getByRole("button", {
-        name: /excluir selecionados/i,
-      });
-      expect(bulkDeleteButton).toBeInTheDocument();
-      expect(bulkDeleteButton).toBeDisabled();
+      expect(screen.queryByText(/selecionado\(s\)/i)).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /excluir selecionados/i }),
+      ).not.toBeInTheDocument();
     });
 
-    it("should enable 'Excluir Selecionados' button when 1 or more requests of any status (e.g. SENT and PAID) are selected", () => {
+    it("should render 'Excluir Selecionados (N)' enabled when 1 or more requests of any status (e.g. SENT and PAID) are selected", () => {
       render(<RequestsTable requests={bulkDeleteMockRequests} />);
 
-      const bulkDeleteButton = screen.getByRole("button", {
-        name: /excluir selecionados/i,
-      });
-      expect(bulkDeleteButton).toBeDisabled();
+      expect(
+        screen.queryByRole("button", { name: /excluir selecionados/i }),
+      ).not.toBeInTheDocument();
 
       const sentCb = screen.getByRole("checkbox", { name: /Felipe Enviado/i });
       const paidCb = screen.getByRole("checkbox", { name: /Gabriela Paga/i });
 
       fireEvent.click(sentCb);
       expect(screen.getByText(/1 selecionado\(s\)/i)).toBeInTheDocument();
-      expect(bulkDeleteButton).not.toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: /excluir selecionados\s*\(1\)/i }),
+      ).not.toBeDisabled();
 
       fireEvent.click(paidCb);
       expect(screen.getByText(/2 selecionado\(s\)/i)).toBeInTheDocument();
-      expect(bulkDeleteButton).not.toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: /excluir selecionados\s*\(2\)/i }),
+      ).not.toBeDisabled();
     });
 
     it("should open a confirmation modal showing the count of requests to be permanently deleted when clicking 'Excluir Selecionados'", () => {
@@ -1389,7 +1461,10 @@ describe("RequestsTable", () => {
         "req-sent",
         "req-paid",
       ]);
-      expect(screen.getByText(/0 selecionado\(s\)/i)).toBeInTheDocument();
+      expect(screen.queryByText(/selecionado\(s\)/i)).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /excluir selecionados/i }),
+      ).not.toBeInTheDocument();
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
@@ -1429,7 +1504,10 @@ describe("RequestsTable", () => {
         "req-paid",
       ]);
       expect(deleteBatchRefundRequestsAction).not.toHaveBeenCalled();
-      expect(screen.getByText(/0 selecionado\(s\)/i)).toBeInTheDocument();
+      expect(screen.queryByText(/selecionado\(s\)/i)).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /excluir selecionados/i }),
+      ).not.toBeInTheDocument();
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
@@ -1508,6 +1586,959 @@ describe("RequestsTable", () => {
       expect(screen.getByText(/2 selecionado\(s\)/i)).toBeInTheDocument();
       expect(sentCb).toBeChecked();
       expect(paidCb).toBeChecked();
+    });
+  });
+
+  describe("Mark Refunds as Paid (Individual & Batch)", () => {
+    const createMockRequest = (
+      id: string,
+      requesterName: string,
+      status: RefundRequest["status"],
+      receiptUrl = `https://example.com/${id}.pdf`,
+    ): RefundRequest => ({
+      id,
+      requester_name: requesterName,
+      status,
+      created_at: new Date("2026-10-10T10:00:00Z").toISOString(),
+      updated_at: new Date("2026-10-10T10:00:00Z").toISOString(),
+      description: null,
+      issue_date: null,
+      issue_number: null,
+      issuer_cnpj: null,
+      issuer_name: null,
+      receipt_file_url: receiptUrl,
+      receiver_cnpj: null,
+      reviewed_by: "admin-1",
+      total_value: 100.0,
+    });
+
+    const markPaidMockRequests: RefundRequest[] = [
+      createMockRequest("req-pending", "Alice Pendente", "PENDING"),
+      createMockRequest("req-processing", "Diego Processando", "PROCESSING"),
+      createMockRequest("req-approved", "Bruno Aprovado", "APPROVED"),
+      createMockRequest("req-denied", "Eduarda Negada", "DENIED"),
+      createMockRequest("req-sent-1", "Felipe Enviado", "SENT"),
+      createMockRequest("req-sent-2", "Helena Enviada", "SENT"),
+      createMockRequest("req-paid", "Gabriela Paga", "PAID"),
+    ];
+
+    describe("Individual Action (3-dots menu)", () => {
+      it("should show 'Marcar como Pago' menuitem inside the 3-dots menu for a SENT request", () => {
+        render(<RequestsTable requests={[markPaidMockRequests[4]]} />);
+
+        const actionButton = screen.getByRole("button", {
+          name: /abrir menu de ações para Felipe Enviado/i,
+        });
+        fireEvent.click(actionButton);
+
+        expect(
+          screen.getByRole("menuitem", { name: /marcar como pago/i }),
+        ).toBeInTheDocument();
+      });
+
+      it("should enable the 3-dots menu button and show 'Marcar como Pago' for a SENT request even when receipt_file_url is empty", () => {
+        const sentWithoutReceipt = createMockRequest(
+          "req-sent-no-url",
+          "Igor Enviado",
+          "SENT",
+          "",
+        );
+        render(<RequestsTable requests={[sentWithoutReceipt]} />);
+
+        const actionButton = screen.getByRole("button", {
+          name: /abrir menu de ações para Igor Enviado/i,
+        });
+        expect(actionButton).not.toBeDisabled();
+
+        fireEvent.click(actionButton);
+        expect(
+          screen.getByRole("menuitem", { name: /marcar como pago/i }),
+        ).toBeInTheDocument();
+      });
+
+      it.each(["PENDING", "PROCESSING", "APPROVED", "DENIED", "PAID"] as const)(
+        "should NOT show 'Marcar como Pago' in the 3-dots menu when status is %s",
+        (status) => {
+          const req = createMockRequest(
+            `req-${status.toLowerCase()}`,
+            `User ${status}`,
+            status,
+          );
+          render(<RequestsTable requests={[req]} />);
+
+          const actionButton = screen.getByRole("button", {
+            name: new RegExp(`abrir menu de ações para User ${status}`, "i"),
+          });
+          fireEvent.click(actionButton);
+
+          expect(
+            screen.queryByRole("menuitem", { name: /marcar como pago/i }),
+          ).not.toBeInTheDocument();
+        },
+      );
+
+      it("should call markRefundAsPaidAction(req.id) directly without opening a modal when 'Marcar como Pago' is clicked", async () => {
+        const sentReq = markPaidMockRequests[4];
+        vi.mocked(markRefundAsPaidAction).mockResolvedValueOnce({
+          success: true,
+          data: { ...sentReq, status: "PAID" },
+        });
+
+        render(<RequestsTable requests={[sentReq]} />);
+
+        fireEvent.click(
+          screen.getByRole("button", {
+            name: /abrir menu de ações para Felipe Enviado/i,
+          }),
+        );
+
+        const markPaidItem = screen.getByRole("menuitem", {
+          name: /marcar como pago/i,
+        });
+
+        await act(async () => {
+          fireEvent.click(markPaidItem);
+        });
+
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+        expect(markRefundAsPaidAction).toHaveBeenCalledTimes(1);
+        expect(markRefundAsPaidAction).toHaveBeenCalledWith("req-sent-1");
+      });
+
+      it("should call onMarkAsPaid(req.id) directly without opening a modal or calling markRefundAsPaidAction when onMarkAsPaid prop is provided", async () => {
+        const sentReq = markPaidMockRequests[4];
+        const onMarkAsPaidMock = vi.fn().mockResolvedValue(undefined);
+
+        render(
+          <RequestsTable
+            requests={[sentReq]}
+            onMarkAsPaid={onMarkAsPaidMock}
+          />,
+        );
+
+        fireEvent.click(
+          screen.getByRole("button", {
+            name: /abrir menu de ações para Felipe Enviado/i,
+          }),
+        );
+
+        const markPaidItem = screen.getByRole("menuitem", {
+          name: /marcar como pago/i,
+        });
+
+        await act(async () => {
+          fireEvent.click(markPaidItem);
+        });
+
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+        expect(onMarkAsPaidMock).toHaveBeenCalledTimes(1);
+        expect(onMarkAsPaidMock).toHaveBeenCalledWith("req-sent-1");
+        expect(markRefundAsPaidAction).not.toHaveBeenCalled();
+      });
+
+      it("should show loading state (disable row action trigger) while markRefundAsPaidAction is pending and re-enable when finished", async () => {
+        const sentReq = markPaidMockRequests[4];
+        let resolvePromise!: (value: {
+          success: true;
+          data: RefundRequest;
+        }) => void;
+        const pendingPromise = new Promise<{
+          success: true;
+          data: RefundRequest;
+        }>((resolve) => {
+          resolvePromise = resolve;
+        });
+
+        vi.mocked(markRefundAsPaidAction).mockReturnValueOnce(pendingPromise);
+
+        render(<RequestsTable requests={[sentReq]} />);
+
+        const actionButton = screen.getByRole("button", {
+          name: /abrir menu de ações para Felipe Enviado/i,
+        });
+        fireEvent.click(actionButton);
+
+        const markPaidItem = screen.getByRole("menuitem", {
+          name: /marcar como pago/i,
+        });
+        fireEvent.click(markPaidItem);
+
+        expect(actionButton).toBeDisabled();
+
+        await act(async () => {
+          resolvePromise({
+            success: true,
+            data: { ...sentReq, status: "PAID" },
+          });
+        });
+
+        expect(actionButton).not.toBeDisabled();
+      });
+
+      it("should display an error alert (role='alert') when markRefundAsPaidAction returns { success: false, error }", async () => {
+        const sentReq = markPaidMockRequests[4];
+        vi.mocked(markRefundAsPaidAction).mockResolvedValueOnce({
+          success: false,
+          error:
+            "Apenas solicitações com status Enviado (SENT) podem ser marcadas como pagas",
+        });
+
+        render(<RequestsTable requests={[sentReq]} />);
+
+        fireEvent.click(
+          screen.getByRole("button", {
+            name: /abrir menu de ações para Felipe Enviado/i,
+          }),
+        );
+
+        const markPaidItem = screen.getByRole("menuitem", {
+          name: /marcar como pago/i,
+        });
+
+        await act(async () => {
+          fireEvent.click(markPaidItem);
+        });
+
+        const alert = await screen.findByRole("alert");
+        expect(alert).toBeInTheDocument();
+        expect(alert).toHaveTextContent(
+          "Apenas solicitações com status Enviado (SENT) podem ser marcadas como pagas",
+        );
+      });
+
+      it("should display an error alert (role='alert') when onMarkAsPaid rejects with an error", async () => {
+        const sentReq = markPaidMockRequests[4];
+        const onMarkAsPaidMock = vi
+          .fn()
+          .mockRejectedValueOnce(new Error("Erro ao marcar solicitação"));
+
+        render(
+          <RequestsTable
+            requests={[sentReq]}
+            onMarkAsPaid={onMarkAsPaidMock}
+          />,
+        );
+
+        fireEvent.click(
+          screen.getByRole("button", {
+            name: /abrir menu de ações para Felipe Enviado/i,
+          }),
+        );
+
+        const markPaidItem = screen.getByRole("menuitem", {
+          name: /marcar como pago/i,
+        });
+
+        await act(async () => {
+          fireEvent.click(markPaidItem);
+        });
+
+        const alert = await screen.findByRole("alert");
+        expect(alert).toBeInTheDocument();
+        expect(alert).toHaveTextContent("Erro ao marcar solicitação");
+      });
+    });
+
+    describe("Batch Action (Top Bar - 'Marcar como Pago em Lote')", () => {
+      it("should NOT render 'Marcar como Pago em Lote' button initially when 0 requests are selected", () => {
+        render(<RequestsTable requests={markPaidMockRequests} />);
+
+        expect(
+          screen.queryByRole("button", { name: /marcar como pago em lote/i }),
+        ).not.toBeInTheDocument();
+      });
+
+      it("should NOT render 'Marcar como Pago em Lote' when only non-SENT rows (PENDING, PROCESSING, APPROVED, DENIED, PAID) are selected", () => {
+        render(<RequestsTable requests={markPaidMockRequests} />);
+
+        fireEvent.click(
+          screen.getByRole("checkbox", { name: /Alice Pendente/i }),
+        );
+        fireEvent.click(
+          screen.getByRole("checkbox", { name: /Diego Processando/i }),
+        );
+        fireEvent.click(
+          screen.getByRole("checkbox", { name: /Bruno Aprovado/i }),
+        );
+        fireEvent.click(
+          screen.getByRole("checkbox", { name: /Eduarda Negada/i }),
+        );
+        fireEvent.click(
+          screen.getByRole("checkbox", { name: /Gabriela Paga/i }),
+        );
+
+        expect(screen.getByText(/5 selecionado\(s\)/i)).toBeInTheDocument();
+        expect(
+          screen.queryByRole("button", { name: /marcar como pago em lote/i }),
+        ).not.toBeInTheDocument();
+      });
+
+      it("should render 'Marcar como Pago em Lote (N)' enabled when 1 or more SENT requests are selected", () => {
+        render(<RequestsTable requests={markPaidMockRequests} />);
+
+        expect(
+          screen.queryByRole("button", { name: /marcar como pago em lote/i }),
+        ).not.toBeInTheDocument();
+
+        fireEvent.click(
+          screen.getByRole("checkbox", { name: /Felipe Enviado/i }),
+        );
+
+        expect(
+          screen.getByRole("button", {
+            name: /marcar como pago em lote\s*\(1\)/i,
+          }),
+        ).not.toBeDisabled();
+
+        fireEvent.click(
+          screen.getByRole("checkbox", { name: /Helena Enviada/i }),
+        );
+
+        expect(
+          screen.getByRole("button", {
+            name: /marcar como pago em lote\s*\(2\)/i,
+          }),
+        ).not.toBeDisabled();
+      });
+
+      it("should call markBatchRefundsAsPaidAction directly (without modal) sending ONLY selected SENT IDs and clear only processed SENT IDs from selection", async () => {
+        const sent1 = markPaidMockRequests[4];
+        const sent2 = markPaidMockRequests[5];
+        vi.mocked(markBatchRefundsAsPaidAction).mockResolvedValueOnce({
+          success: true,
+          data: {
+            succeeded: [
+              { ...sent1, status: "PAID" },
+              { ...sent2, status: "PAID" },
+            ],
+            failed: [],
+          },
+        });
+
+        render(<RequestsTable requests={markPaidMockRequests} />);
+
+        const pendingCb = screen.getByRole("checkbox", {
+          name: /Alice Pendente/i,
+        });
+        const approvedCb = screen.getByRole("checkbox", {
+          name: /Bruno Aprovado/i,
+        });
+        const sent1Cb = screen.getByRole("checkbox", {
+          name: /Felipe Enviado/i,
+        });
+        const sent2Cb = screen.getByRole("checkbox", {
+          name: /Helena Enviada/i,
+        });
+
+        fireEvent.click(pendingCb);
+        fireEvent.click(approvedCb);
+        fireEvent.click(sent1Cb);
+        fireEvent.click(sent2Cb);
+        expect(screen.getByText(/4 selecionado\(s\)/i)).toBeInTheDocument();
+
+        const batchPayButton = screen.getByRole("button", {
+          name: /marcar como pago em lote/i,
+        });
+
+        await act(async () => {
+          fireEvent.click(batchPayButton);
+        });
+
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+        expect(markBatchRefundsAsPaidAction).toHaveBeenCalledTimes(1);
+        expect(markBatchRefundsAsPaidAction).toHaveBeenCalledWith([
+          "req-sent-1",
+          "req-sent-2",
+        ]);
+        expect(sent1Cb).not.toBeChecked();
+        expect(sent2Cb).not.toBeChecked();
+        expect(pendingCb).toBeChecked();
+        expect(approvedCb).toBeChecked();
+        expect(screen.getByText(/2 selecionado\(s\)/i)).toBeInTheDocument();
+      });
+
+      it("should call onMarkBatchAsPaid directly (without modal or calling markBatchRefundsAsPaidAction) sending ONLY selected SENT IDs and clear processed SENT IDs when onMarkBatchAsPaid prop is provided", async () => {
+        const onMarkBatchAsPaidMock = vi.fn().mockResolvedValue(undefined);
+
+        render(
+          <RequestsTable
+            requests={markPaidMockRequests}
+            onMarkBatchAsPaid={onMarkBatchAsPaidMock}
+          />,
+        );
+
+        const approvedCb = screen.getByRole("checkbox", {
+          name: /Bruno Aprovado/i,
+        });
+        const sent1Cb = screen.getByRole("checkbox", {
+          name: /Felipe Enviado/i,
+        });
+
+        fireEvent.click(approvedCb);
+        fireEvent.click(sent1Cb);
+        expect(screen.getByText(/2 selecionado\(s\)/i)).toBeInTheDocument();
+
+        const batchPayButton = screen.getByRole("button", {
+          name: /marcar como pago em lote/i,
+        });
+
+        await act(async () => {
+          fireEvent.click(batchPayButton);
+        });
+
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+        expect(onMarkBatchAsPaidMock).toHaveBeenCalledTimes(1);
+        expect(onMarkBatchAsPaidMock).toHaveBeenCalledWith(["req-sent-1"]);
+        expect(markBatchRefundsAsPaidAction).not.toHaveBeenCalled();
+        expect(sent1Cb).not.toBeChecked();
+        expect(approvedCb).toBeChecked();
+        expect(screen.getByText(/1 selecionado\(s\)/i)).toBeInTheDocument();
+      });
+
+      it("should show loading state (disable button and render spinner) while markBatchRefundsAsPaidAction is pending", async () => {
+        const sent1 = markPaidMockRequests[4];
+        let resolvePromise!: (value: {
+          success: boolean;
+          data?: {
+            succeeded: RefundRequest[];
+            failed: Array<{ id: string; error: string }>;
+          };
+          error?: string;
+        }) => void;
+        const pendingPromise = new Promise<{
+          success: boolean;
+          data?: {
+            succeeded: RefundRequest[];
+            failed: Array<{ id: string; error: string }>;
+          };
+          error?: string;
+        }>((resolve) => {
+          resolvePromise = resolve;
+        });
+
+        vi.mocked(markBatchRefundsAsPaidAction).mockReturnValueOnce(
+          pendingPromise,
+        );
+
+        render(<RequestsTable requests={markPaidMockRequests} />);
+
+        fireEvent.click(
+          screen.getByRole("checkbox", { name: /Felipe Enviado/i }),
+        );
+
+        const batchPayButton = screen.getByRole("button", {
+          name: /marcar como pago em lote/i,
+        });
+        fireEvent.click(batchPayButton);
+
+        expect(batchPayButton).toBeDisabled();
+        expect(
+          batchPayButton.querySelector(".animate-spin"),
+        ).toBeInTheDocument();
+
+        await act(async () => {
+          resolvePromise({
+            success: true,
+            data: {
+              succeeded: [{ ...sent1, status: "PAID" }],
+              failed: [],
+            },
+          });
+        });
+
+        expect(
+          screen.queryByRole("button", { name: /marcar como pago em lote/i }),
+        ).not.toBeInTheDocument();
+        expect(screen.queryByText(/selecionado\(s\)/i)).not.toBeInTheDocument();
+      });
+
+      it("should display error alert (role='alert') and remove only succeeded SENT IDs from selection when markBatchRefundsAsPaidAction returns partial failure", async () => {
+        const sent1 = markPaidMockRequests[4];
+        vi.mocked(markBatchRefundsAsPaidAction).mockResolvedValueOnce({
+          success: false,
+          data: {
+            succeeded: [{ ...sent1, status: "PAID" }],
+            failed: [
+              { id: "req-sent-2", error: "Erro ao atualizar req-sent-2" },
+            ],
+          },
+          error:
+            "Falha ao marcar 1 solicitação(ões) como paga(s): Erro ao atualizar req-sent-2",
+        });
+
+        render(<RequestsTable requests={markPaidMockRequests} />);
+
+        const approvedCb = screen.getByRole("checkbox", {
+          name: /Bruno Aprovado/i,
+        });
+        const sent1Cb = screen.getByRole("checkbox", {
+          name: /Felipe Enviado/i,
+        });
+        const sent2Cb = screen.getByRole("checkbox", {
+          name: /Helena Enviada/i,
+        });
+
+        fireEvent.click(approvedCb);
+        fireEvent.click(sent1Cb);
+        fireEvent.click(sent2Cb);
+        expect(screen.getByText(/3 selecionado\(s\)/i)).toBeInTheDocument();
+
+        await act(async () => {
+          fireEvent.click(
+            screen.getByRole("button", { name: /marcar como pago em lote/i }),
+          );
+        });
+
+        const alert = await screen.findByRole("alert");
+        expect(alert).toBeInTheDocument();
+        expect(alert).toHaveTextContent("Erro ao atualizar req-sent-2");
+        expect(sent1Cb).not.toBeChecked();
+        expect(sent2Cb).toBeChecked();
+        expect(approvedCb).toBeChecked();
+        expect(screen.getByText(/2 selecionado\(s\)/i)).toBeInTheDocument();
+      });
+
+      it("should display error alert (role='alert') and keep all selected IDs when markBatchRefundsAsPaidAction returns an error without data", async () => {
+        vi.mocked(markBatchRefundsAsPaidAction).mockResolvedValueOnce({
+          success: false,
+          error: "Erro inesperado ao marcar solicitações como pagas",
+        });
+
+        render(<RequestsTable requests={markPaidMockRequests} />);
+
+        const sent1Cb = screen.getByRole("checkbox", {
+          name: /Felipe Enviado/i,
+        });
+        const sent2Cb = screen.getByRole("checkbox", {
+          name: /Helena Enviada/i,
+        });
+
+        fireEvent.click(sent1Cb);
+        fireEvent.click(sent2Cb);
+
+        await act(async () => {
+          fireEvent.click(
+            screen.getByRole("button", { name: /marcar como pago em lote/i }),
+          );
+        });
+
+        const alert = await screen.findByRole("alert");
+        expect(alert).toBeInTheDocument();
+        expect(alert).toHaveTextContent(
+          "Erro inesperado ao marcar solicitações como pagas",
+        );
+        expect(sent1Cb).toBeChecked();
+        expect(sent2Cb).toBeChecked();
+        expect(screen.getByText(/2 selecionado\(s\)/i)).toBeInTheDocument();
+      });
+
+      it("should display error alert (role='alert') and keep all selected IDs when markBatchRefundsAsPaidAction rejects with an exception", async () => {
+        vi.mocked(markBatchRefundsAsPaidAction).mockRejectedValueOnce(
+          new Error("Falha de comunicação com o servidor"),
+        );
+
+        render(<RequestsTable requests={markPaidMockRequests} />);
+
+        const sent1Cb = screen.getByRole("checkbox", {
+          name: /Felipe Enviado/i,
+        });
+        fireEvent.click(sent1Cb);
+
+        await act(async () => {
+          fireEvent.click(
+            screen.getByRole("button", { name: /marcar como pago em lote/i }),
+          );
+        });
+
+        const alert = await screen.findByRole("alert");
+        expect(alert).toBeInTheDocument();
+        expect(alert).toHaveTextContent("Falha de comunicação com o servidor");
+        expect(sent1Cb).toBeChecked();
+        expect(screen.getByText(/1 selecionado\(s\)/i)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe("Status Filter Pills and Contextual Bulk Actions Bar", () => {
+    const createFilterMockRequest = (
+      id: string,
+      requesterName: string,
+      status: RefundRequest["status"],
+    ): RefundRequest => ({
+      id,
+      requester_name: requesterName,
+      status,
+      created_at: new Date("2026-10-15T10:00:00Z").toISOString(),
+      updated_at: new Date("2026-10-15T10:00:00Z").toISOString(),
+      description: null,
+      issue_date: null,
+      issue_number: null,
+      issuer_cnpj: null,
+      issuer_name: null,
+      receipt_file_url: `https://example.com/${id}.pdf`,
+      receiver_cnpj: null,
+      reviewed_by: "admin-1",
+      total_value: 100.0,
+    });
+
+    const filterMockRequests: RefundRequest[] = [
+      createFilterMockRequest("req-p1", "Alice Pendente", "PENDING"),
+      createFilterMockRequest("req-a1", "Bruno Aprovado", "APPROVED"),
+      createFilterMockRequest("req-a2", "Carla Aprovada", "APPROVED"),
+      createFilterMockRequest("req-pr1", "Diego Processando", "PROCESSING"),
+      createFilterMockRequest("req-d1", "Eduarda Negada", "DENIED"),
+      createFilterMockRequest("req-s1", "Felipe Enviado", "SENT"),
+      createFilterMockRequest("req-s2", "Helena Enviada", "SENT"),
+      createFilterMockRequest("req-pa1", "Gabriela Paga", "PAID"),
+    ];
+
+    it("should render all status filter pills (Todos, Pendente, Aprovado, Enviado, Pago, Negado) with accurate counts", () => {
+      render(<RequestsTable requests={filterMockRequests} />);
+
+      const expectedCounts: Array<[string, number]> = [
+        ["Todos", 8],
+        ["Pendente", 1],
+        ["Aprovado", 2],
+        ["Enviado", 2],
+        ["Pago", 1],
+        ["Negado", 1],
+      ];
+
+      for (const [label, count] of expectedCounts) {
+        const control = findStatusFilterControl(label);
+        expect(control).toBeInTheDocument();
+        expect(control.textContent ?? "").toMatch(
+          new RegExp(`(?:^|\\D)${count}(?:\\D|$)`),
+        );
+      }
+    });
+
+    it("should render all status filter pills with count 0 when requests is empty", () => {
+      render(<RequestsTable requests={[]} />);
+
+      for (const label of [
+        "Todos",
+        "Pendente",
+        "Aprovado",
+        "Enviado",
+        "Pago",
+        "Negado",
+      ]) {
+        const control = findStatusFilterControl(label);
+        expect(control).toBeInTheDocument();
+        expect(control.textContent ?? "").toMatch(/(?:^|\D)0(?:\D|$)/);
+      }
+    });
+
+    it("should filter table rows when clicking each status filter and show all rows again on clicking 'Todos'", () => {
+      render(<RequestsTable requests={filterMockRequests} />);
+
+      const table = screen.getByRole("table");
+
+      const statusCases: Array<{
+        filterLabel: string;
+        expectedNames: string[];
+        unexpectedNames: string[];
+      }> = [
+        {
+          filterLabel: "Pendente",
+          expectedNames: ["Alice Pendente"],
+          unexpectedNames: [
+            "Bruno Aprovado",
+            "Carla Aprovada",
+            "Diego Processando",
+            "Eduarda Negada",
+            "Felipe Enviado",
+            "Helena Enviada",
+            "Gabriela Paga",
+          ],
+        },
+        {
+          filterLabel: "Aprovado",
+          expectedNames: ["Bruno Aprovado", "Carla Aprovada"],
+          unexpectedNames: [
+            "Alice Pendente",
+            "Diego Processando",
+            "Eduarda Negada",
+            "Felipe Enviado",
+            "Helena Enviada",
+            "Gabriela Paga",
+          ],
+        },
+        {
+          filterLabel: "Enviado",
+          expectedNames: ["Felipe Enviado", "Helena Enviada"],
+          unexpectedNames: [
+            "Alice Pendente",
+            "Bruno Aprovado",
+            "Carla Aprovada",
+            "Diego Processando",
+            "Eduarda Negada",
+            "Gabriela Paga",
+          ],
+        },
+        {
+          filterLabel: "Pago",
+          expectedNames: ["Gabriela Paga"],
+          unexpectedNames: [
+            "Alice Pendente",
+            "Bruno Aprovado",
+            "Carla Aprovada",
+            "Diego Processando",
+            "Eduarda Negada",
+            "Felipe Enviado",
+            "Helena Enviada",
+          ],
+        },
+        {
+          filterLabel: "Negado",
+          expectedNames: ["Eduarda Negada"],
+          unexpectedNames: [
+            "Alice Pendente",
+            "Bruno Aprovado",
+            "Carla Aprovada",
+            "Diego Processando",
+            "Felipe Enviado",
+            "Helena Enviada",
+            "Gabriela Paga",
+          ],
+        },
+      ];
+
+      for (const {
+        filterLabel,
+        expectedNames,
+        unexpectedNames,
+      } of statusCases) {
+        fireEvent.click(findStatusFilterControl(filterLabel));
+        for (const name of expectedNames) {
+          expect(within(table).getByText(name)).toBeInTheDocument();
+        }
+        for (const name of unexpectedNames) {
+          expect(within(table).queryByText(name)).not.toBeInTheDocument();
+        }
+      }
+
+      fireEvent.click(findStatusFilterControl("Todos"));
+      for (const req of filterMockRequests) {
+        expect(within(table).getByText(req.requester_name)).toBeInTheDocument();
+      }
+    });
+
+    it("should show empty state message and disable header select-all checkbox when active filter has 0 matching rows", () => {
+      const withoutDenied = filterMockRequests.filter(
+        (r) => r.status !== "DENIED",
+      );
+      render(<RequestsTable requests={withoutDenied} />);
+
+      fireEvent.click(findStatusFilterControl("Negado"));
+
+      expect(
+        screen.getByText("Nenhuma solicitação encontrada."),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("checkbox", {
+          name: /selecionar todas as solicitações/i,
+        }),
+      ).toBeDisabled();
+    });
+
+    it("should select and deselect only the visible requests in the active filter when clicking header select-all checkbox", () => {
+      render(<RequestsTable requests={filterMockRequests} />);
+
+      fireEvent.click(findStatusFilterControl("Aprovado"));
+
+      const selectAllCheckbox = screen.getByRole("checkbox", {
+        name: /selecionar todas as solicitações/i,
+      });
+      expect(selectAllCheckbox).not.toBeDisabled();
+
+      fireEvent.click(selectAllCheckbox);
+
+      expect(screen.getByText(/2 selecionado\(s\)/i)).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", {
+          name: /enviar pagamentos em lote\s*\(2\)/i,
+        }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /excluir selecionados\s*\(2\)/i }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /aprovar para leitura em lote/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /marcar como pago em lote/i }),
+      ).not.toBeInTheDocument();
+
+      expect(
+        screen.getByRole("checkbox", { name: /Bruno Aprovado/i }),
+      ).toBeChecked();
+      expect(
+        screen.getByRole("checkbox", { name: /Carla Aprovada/i }),
+      ).toBeChecked();
+
+      fireEvent.click(selectAllCheckbox);
+      expect(screen.queryByText(/selecionado\(s\)/i)).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("checkbox", { name: /Bruno Aprovado/i }),
+      ).not.toBeChecked();
+      expect(
+        screen.getByRole("checkbox", { name: /Carla Aprovada/i }),
+      ).not.toBeChecked();
+
+      fireEvent.click(findStatusFilterControl("Todos"));
+      expect(
+        screen.getByRole("checkbox", { name: /Alice Pendente/i }),
+      ).not.toBeChecked();
+      expect(
+        screen.getByRole("checkbox", { name: /Felipe Enviado/i }),
+      ).not.toBeChecked();
+    });
+
+    it("should clear all selections and hide the contextual bulk actions bar when clicking 'Limpar'", () => {
+      render(<RequestsTable requests={filterMockRequests} />);
+
+      const pendingCb = screen.getByRole("checkbox", {
+        name: /Alice Pendente/i,
+      });
+      const approvedCb = screen.getByRole("checkbox", {
+        name: /Bruno Aprovado/i,
+      });
+
+      fireEvent.click(pendingCb);
+      fireEvent.click(approvedCb);
+
+      expect(screen.getByText(/2 selecionado\(s\)/i)).toBeInTheDocument();
+      const clearButton = screen.getByRole("button", { name: /limpar/i });
+      expect(clearButton).toBeInTheDocument();
+
+      fireEvent.click(clearButton);
+
+      expect(pendingCb).not.toBeChecked();
+      expect(approvedCb).not.toBeChecked();
+      expect(screen.queryByText(/selecionado\(s\)/i)).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /limpar/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /aprovar para leitura/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /enviar pagamentos/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /marcar como pago/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /exportar csv/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /excluir/i }),
+      ).not.toBeInTheDocument();
+
+      expect(findStatusFilterControl("Todos")).toBeInTheDocument();
+    });
+
+    it("should render only applicable contextual action buttons with exact counts for PENDING, APPROVED, SENT, and non-workflow selections", () => {
+      render(<RequestsTable requests={filterMockRequests} />);
+
+      // 1) Only SENT selected (2)
+      fireEvent.click(
+        screen.getByRole("checkbox", { name: /Felipe Enviado/i }),
+      );
+      fireEvent.click(
+        screen.getByRole("checkbox", { name: /Helena Enviada/i }),
+      );
+
+      expect(screen.getByText(/2 selecionado\(s\)/i)).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", {
+          name: /marcar como pago em lote\s*\(2\)/i,
+        }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /exportar csv/i }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /excluir selecionados\s*\(2\)/i }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /aprovar para leitura em lote/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /enviar pagamentos em lote/i }),
+      ).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: /limpar/i }));
+
+      // 2) Only PROCESSING, DENIED, PAID selected (3) -> no workflow buttons
+      fireEvent.click(
+        screen.getByRole("checkbox", { name: /Diego Processando/i }),
+      );
+      fireEvent.click(
+        screen.getByRole("checkbox", { name: /Eduarda Negada/i }),
+      );
+      fireEvent.click(screen.getByRole("checkbox", { name: /Gabriela Paga/i }));
+
+      expect(screen.getByText(/3 selecionado\(s\)/i)).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /exportar csv/i }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /excluir selecionados\s*\(3\)/i }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /aprovar para leitura em lote/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /enviar pagamentos em lote/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /marcar como pago em lote/i }),
+      ).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: /limpar/i }));
+
+      // 3) Mixed selection: 1 PENDING + 2 APPROVED + 2 SENT = 5
+      fireEvent.click(
+        screen.getByRole("checkbox", { name: /Alice Pendente/i }),
+      );
+      fireEvent.click(
+        screen.getByRole("checkbox", { name: /Bruno Aprovado/i }),
+      );
+      fireEvent.click(
+        screen.getByRole("checkbox", { name: /Carla Aprovada/i }),
+      );
+      fireEvent.click(
+        screen.getByRole("checkbox", { name: /Felipe Enviado/i }),
+      );
+      fireEvent.click(
+        screen.getByRole("checkbox", { name: /Helena Enviada/i }),
+      );
+
+      expect(screen.getByText(/5 selecionado\(s\)/i)).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", {
+          name: /aprovar para leitura em lote\s*\(1\)/i,
+        }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", {
+          name: /enviar pagamentos em lote\s*\(2\)/i,
+        }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", {
+          name: /marcar como pago em lote\s*\(2\)/i,
+        }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /exportar csv/i }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /excluir selecionados\s*\(5\)/i }),
+      ).toBeInTheDocument();
     });
   });
 });

@@ -302,4 +302,46 @@ export class RefundService {
 
     return { succeeded, failed };
   }
+
+  async markAsPaid(requestId: string): Promise<RefundRequest> {
+    const request = await this.repository.findById(requestId);
+    if (!request) {
+      throw new Error("Solicitação de reembolso não encontrada");
+    }
+    if (request.status !== "SENT") {
+      throw new Error(
+        "Apenas solicitações com status Enviado (SENT) podem ser marcadas como pagas",
+      );
+    }
+    return await this.repository.updateStatus(requestId, "PAID");
+  }
+
+  async markBatchAsPaid(requestIds: string[]): Promise<{
+    succeeded: RefundRequest[];
+    failed: Array<{ id: string; error: string }>;
+  }> {
+    if (!requestIds || requestIds.length === 0) {
+      throw new Error("Nenhuma solicitação selecionada");
+    }
+
+    const results = await Promise.allSettled(
+      requestIds.map((id) => this.markAsPaid(id)),
+    );
+
+    const succeeded: RefundRequest[] = [];
+    const failed: Array<{ id: string; error: string }> = [];
+
+    results.forEach((res, index) => {
+      const id = requestIds[index];
+      if (res.status === "fulfilled") {
+        succeeded.push(res.value);
+      } else {
+        const errorMsg =
+          res.reason instanceof Error ? res.reason.message : String(res.reason);
+        failed.push({ id, error: errorMsg });
+      }
+    });
+
+    return { succeeded, failed };
+  }
 }
