@@ -31,6 +31,8 @@ import {
 import {
   REFUND_STATUS_MAP,
   type RefundRequest,
+  type RefundStatus,
+  RefundStatusSchema,
   type UpdateRefundInput,
 } from "@/models/refund.model";
 import type { EmailSettings } from "@/models/settings.model";
@@ -125,7 +127,24 @@ export function RequestsTable({
   const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
-  const selectableRequests = requests;
+  const [statusFilter, setStatusFilter] = useState<"ALL" | RefundStatus>("ALL");
+
+  const statusCounts = {
+    ALL: requests.length,
+    PENDING: requests.filter((r) => r.status === "PENDING").length,
+    APPROVED: requests.filter((r) => r.status === "APPROVED").length,
+    SENT: requests.filter((r) => r.status === "SENT").length,
+    PAID: requests.filter((r) => r.status === "PAID").length,
+    DENIED: requests.filter((r) => r.status === "DENIED").length,
+    PROCESSING: requests.filter((r) => r.status === "PROCESSING").length,
+  };
+
+  const filteredRequests =
+    statusFilter === "ALL"
+      ? requests
+      : requests.filter((r) => r.status === statusFilter);
+
+  const selectableRequests = filteredRequests;
   const hasSelectableRequests = selectableRequests.length > 0;
   const allSelectableSelected =
     hasSelectableRequests &&
@@ -133,9 +152,11 @@ export function RequestsTable({
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedIds(selectableRequests.map((r) => r.id));
+      const filteredIds = filteredRequests.map((r) => r.id);
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...filteredIds])));
     } else {
-      setSelectedIds([]);
+      const filteredIds = filteredRequests.map((r) => r.id);
+      setSelectedIds((prev) => prev.filter((id) => !filteredIds.includes(id)));
     }
   };
 
@@ -420,65 +441,123 @@ export function RequestsTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
-        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-          {selectedIds.length} selecionado(s)
-        </span>
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={selectedIds.length === 0 || isExportingCsv}
-            onClick={handleExportCsv}
-          >
-            {isExportingCsv && (
-              <Loader2 className="size-4 animate-spin mr-1.5" />
-            )}
-            <Download className="size-4 mr-1.5" />
-            Exportar CSV
-          </Button>
-          <Button
-            type="button"
-            disabled={selectedPendingIds.length === 0 || isBatchProcessing}
-            onClick={handleProcessBatch}
-          >
-            {isBatchProcessing && (
-              <Loader2 className="size-4 animate-spin mr-1.5" />
-            )}
-            Aprovar para Leitura em Lote
-          </Button>
-          <Button
-            type="button"
-            disabled={selectedApprovedRequests.length === 0}
-            onClick={() => setIsBatchDialogOpen(true)}
-          >
-            Enviar Pagamentos em Lote
-          </Button>
-          <Button
-            type="button"
-            disabled={selectedSentIds.length === 0 || isBatchMarkingPaid}
-            onClick={handleMarkBatchAsPaid}
-          >
-            {isBatchMarkingPaid && (
-              <Loader2 className="size-4 animate-spin mr-1.5" />
-            )}
-            <BadgeCheck className="size-4 mr-1.5" />
-            Marcar como Pago em Lote
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            disabled={selectedIds.length === 0 || isBulkDeleting}
-            onClick={() => setIsBulkDeleteDialogOpen(true)}
-          >
-            {isBulkDeleting && (
-              <Loader2 className="size-4 animate-spin mr-1.5" />
-            )}
-            <Trash2 className="size-4 mr-1.5" />
-            Excluir Selecionados
-          </Button>
-        </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {(
+          [
+            { key: "ALL", label: "Todos", count: statusCounts.ALL },
+            { key: "PENDING", label: "Pendente", count: statusCounts.PENDING },
+            {
+              key: "APPROVED",
+              label: "Aprovado",
+              count: statusCounts.APPROVED,
+            },
+            { key: "SENT", label: "Enviado", count: statusCounts.SENT },
+            { key: "PAID", label: "Pago", count: statusCounts.PAID },
+            { key: "DENIED", label: "Negado", count: statusCounts.DENIED },
+          ] as const
+        ).map((filter) => {
+          const isActive = statusFilter === filter.key;
+          return (
+            <button
+              key={filter.key}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setStatusFilter(filter.key)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                isActive
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted/60 text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              <span>{filter.label}</span>
+              <span className="ml-1 text-xs opacity-80">({filter.count})</span>
+            </button>
+          );
+        })}
       </div>
+
+      {selectedIds.length > 0 && (
+        <div className="bg-muted/60 dark:bg-gray-800/80 border border-primary/20 rounded-lg px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">
+              {selectedIds.length} selecionado(s)
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedIds([])}
+            >
+              Limpar
+            </Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {selectedPendingIds.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                disabled={isBatchProcessing}
+                onClick={handleProcessBatch}
+              >
+                {isBatchProcessing && (
+                  <Loader2 className="size-4 animate-spin mr-1.5" />
+                )}
+                Aprovar para Leitura em Lote ({selectedPendingIds.length})
+              </Button>
+            )}
+            {selectedApprovedRequests.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setIsBatchDialogOpen(true)}
+              >
+                Enviar Pagamentos em Lote ({selectedApprovedRequests.length})
+              </Button>
+            )}
+            {selectedSentIds.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                disabled={isBatchMarkingPaid}
+                onClick={handleMarkBatchAsPaid}
+              >
+                {isBatchMarkingPaid && (
+                  <Loader2 className="size-4 animate-spin mr-1.5" />
+                )}
+                <BadgeCheck className="size-4 mr-1.5" />
+                Marcar como Pago em Lote ({selectedSentIds.length})
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isExportingCsv}
+              onClick={handleExportCsv}
+            >
+              {isExportingCsv && (
+                <Loader2 className="size-4 animate-spin mr-1.5" />
+              )}
+              <Download className="size-4 mr-1.5" />
+              Exportar CSV
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={isBulkDeleting}
+              onClick={() => setIsBulkDeleteDialogOpen(true)}
+            >
+              {isBulkDeleting && (
+                <Loader2 className="size-4 animate-spin mr-1.5" />
+              )}
+              <Trash2 className="size-4 mr-1.5" />
+              Excluir Selecionados ({selectedIds.length})
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="overflow-x-auto">
         {errorMessage && (
@@ -526,14 +605,14 @@ export function RequestsTable({
             </tr>
           </thead>
           <tbody>
-            {requests.length === 0 ? (
+            {filteredRequests.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                   Nenhuma solicitação encontrada.
                 </td>
               </tr>
             ) : (
-              requests.map((req) => {
+              filteredRequests.map((req) => {
                 const currentStatus = REFUND_STATUS_MAP[req.status];
                 const isSelected = selectedIds.includes(req.id);
                 const hasReceipt = Boolean(req.receipt_file_url);
