@@ -30,6 +30,7 @@ import {
   type RefundRequest,
   type UpdateRefundInput,
 } from "@/models/refund.model";
+import type { EmailSettings } from "@/models/settings.model";
 import { Badge } from "./badge";
 import {
   type BatchEmailMetadata,
@@ -58,6 +59,7 @@ export type { RefundRequest };
 
 export interface RequestsTableProps {
   requests: RefundRequest[];
+  defaultEmailSettings?: EmailSettings;
   onProcessRequest?: (requestId: string) => Promise<void> | void;
   onProcessBatch?: (requestIds: string[]) => Promise<void> | void;
   onConfirmBatch?: (
@@ -78,6 +80,7 @@ export interface RequestsTableProps {
 
 export function RequestsTable({
   requests,
+  defaultEmailSettings,
   onProcessRequest,
   onProcessBatch,
   onConfirmBatch,
@@ -637,6 +640,7 @@ export function RequestsTable({
           isOpen={isBatchDialogOpen}
           onClose={() => setIsBatchDialogOpen(false)}
           selectedRequests={selectedApprovedRequests}
+          defaultSettings={defaultEmailSettings}
           onConfirm={handleConfirmBatch}
         />
 
