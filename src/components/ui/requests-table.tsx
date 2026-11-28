@@ -12,7 +12,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   processBatchReceiptsAction,
   processReceiptAction,
@@ -127,6 +127,32 @@ export function RequestsTable({
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   const [statusFilter, setStatusFilter] = useState<"ALL" | RefundStatus>("ALL");
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [indicatorStyle, setIndicatorStyle] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    ready: boolean;
+  }>({ left: 0, top: 0, width: 0, height: 0, ready: false });
+
+  const updateIndicator = useCallback(() => {
+    const activeTab = tabRefs.current[statusFilter];
+    if (!activeTab) return;
+    setIndicatorStyle({
+      left: activeTab.offsetLeft,
+      top: activeTab.offsetTop,
+      width: activeTab.offsetWidth,
+      height: activeTab.offsetHeight,
+      ready: activeTab.offsetWidth > 0,
+    });
+  }, [statusFilter]);
+
+  useEffect(() => {
+    updateIndicator();
+    window.addEventListener("resize", updateIndicator);
+    return () => window.removeEventListener("resize", updateIndicator);
+  }, [updateIndicator]);
 
   const statusCounts = {
     ALL: requests.length,
@@ -444,8 +470,19 @@ export function RequestsTable({
         <div
           role="tablist"
           aria-label="Filtrar solicitações por status"
-          className="inline-flex flex-wrap items-center gap-1 rounded-lg bg-muted p-1"
+          className="relative inline-flex flex-wrap items-center gap-1 rounded-lg bg-muted p-1"
         >
+          {indicatorStyle.ready && (
+            <span
+              aria-hidden="true"
+              style={{
+                transform: `translate3d(${indicatorStyle.left}px, ${indicatorStyle.top}px, 0)`,
+                width: `${indicatorStyle.width}px`,
+                height: `${indicatorStyle.height}px`,
+              }}
+              className="pointer-events-none absolute left-0 top-0 rounded-md bg-background shadow-sm transition-[transform,width,height] duration-200 ease-out"
+            />
+          )}
           {(
             [
               { key: "ALL", label: "Todos", count: statusCounts.ALL },
@@ -468,19 +505,24 @@ export function RequestsTable({
             return (
               <button
                 key={filter.key}
+                ref={(el) => {
+                  tabRefs.current[filter.key] = el;
+                }}
                 type="button"
                 role="tab"
                 aria-selected={isActive}
                 onClick={() => setStatusFilter(filter.key)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                className={`relative z-10 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors duration-200 cursor-pointer ${
                   isActive
-                    ? "bg-background text-foreground shadow-sm"
+                    ? indicatorStyle.ready
+                      ? "text-foreground"
+                      : "bg-background text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <span>{filter.label}</span>
                 <span
-                  className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] leading-none tabular-nums ${
+                  className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] leading-none tabular-nums transition-colors duration-200 ${
                     isActive
                       ? "bg-primary/10 text-primary font-semibold"
                       : "bg-background/60 text-muted-foreground"
