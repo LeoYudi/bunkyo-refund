@@ -32,7 +32,6 @@ import {
   REFUND_STATUS_MAP,
   type RefundRequest,
   type RefundStatus,
-  RefundStatusSchema,
   type UpdateRefundInput,
 } from "@/models/refund.model";
 import type { EmailSettings } from "@/models/settings.model";
@@ -440,45 +439,63 @@ export function RequestsTable({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        {(
-          [
-            { key: "ALL", label: "Todos", count: statusCounts.ALL },
-            { key: "PENDING", label: "Pendente", count: statusCounts.PENDING },
-            {
-              key: "APPROVED",
-              label: "Aprovado",
-              count: statusCounts.APPROVED,
-            },
-            { key: "SENT", label: "Enviado", count: statusCounts.SENT },
-            { key: "PAID", label: "Pago", count: statusCounts.PAID },
-            { key: "DENIED", label: "Negado", count: statusCounts.DENIED },
-          ] as const
-        ).map((filter) => {
-          const isActive = statusFilter === filter.key;
-          return (
-            <button
-              key={filter.key}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => setStatusFilter(filter.key)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                isActive
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted/60 text-muted-foreground hover:bg-muted"
-              }`}
-            >
-              <span>{filter.label}</span>
-              <span className="ml-1 text-xs opacity-80">({filter.count})</span>
-            </button>
-          );
-        })}
+    <div>
+      <div className="px-4 py-3 border-b border-border bg-card flex flex-wrap items-center justify-between gap-3">
+        <div
+          role="tablist"
+          aria-label="Filtrar solicitações por status"
+          className="inline-flex flex-wrap items-center gap-1 rounded-lg bg-muted p-1"
+        >
+          {(
+            [
+              { key: "ALL", label: "Todos", count: statusCounts.ALL },
+              {
+                key: "PENDING",
+                label: "Pendente",
+                count: statusCounts.PENDING,
+              },
+              {
+                key: "APPROVED",
+                label: "Aprovado",
+                count: statusCounts.APPROVED,
+              },
+              { key: "SENT", label: "Enviado", count: statusCounts.SENT },
+              { key: "PAID", label: "Pago", count: statusCounts.PAID },
+              { key: "DENIED", label: "Negado", count: statusCounts.DENIED },
+            ] as const
+          ).map((filter) => {
+            const isActive = statusFilter === filter.key;
+            return (
+              <button
+                key={filter.key}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setStatusFilter(filter.key)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                  isActive
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <span>{filter.label}</span>
+                <span
+                  className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] leading-none tabular-nums ${
+                    isActive
+                      ? "bg-primary/10 text-primary font-semibold"
+                      : "bg-background/60 text-muted-foreground"
+                  }`}
+                >
+                  {filter.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {selectedIds.length > 0 && (
-        <div className="bg-muted/60 dark:bg-gray-800/80 border border-primary/20 rounded-lg px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="px-4 py-2.5 border-b border-primary/20 bg-primary/5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">
               {selectedIds.length} selecionado(s)
